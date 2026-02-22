@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { corsMiddleware, logger } from "./middleware";
-import { healthRoutes, toolsRoutes } from "./routes";
+import { healthRoutes, toolsRoutes, pmRoutes } from "./routes";
 import { env } from "./env";
 
 const app = new Hono();
@@ -12,6 +12,7 @@ app.use("*", logger);
 // Routes
 app.route("/api/health", healthRoutes);
 app.route("/api/tools", toolsRoutes);
+app.route("/api/pm", pmRoutes);
 
 // Root
 app.get("/", (c) => {

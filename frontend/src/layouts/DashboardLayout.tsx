@@ -16,6 +16,7 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import BuildIcon from "@mui/icons-material/Build";
+import HandymanIcon from "@mui/icons-material/Handyman";
 import Box from "@mui/material/Box";
 
 const DRAWER_WIDTH = 240;
@@ -23,6 +24,7 @@ const DRAWER_WIDTH = 240;
 const navItems = [
   { label: "Home", icon: <HomeIcon />, path: "/" },
   { label: "Tools", icon: <BuildIcon />, path: "/dashboards/tools" },
+  { label: "Preventive Maintenance", icon: <HandymanIcon />, path: "/preventive-maintenance" },
   { label: "Production", icon: <DashboardIcon />, path: "/dashboards/production" },
   { label: "Quality", icon: <BarChartIcon />, path: "/dashboards/quality" },
   { label: "Downtime", icon: <ShowChartIcon />, path: "/dashboards/downtime" },
@@ -93,8 +95,11 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          display: "flex",
+          flexDirection: "column",
           mt: "64px",
+          height: "calc(100vh - 64px)",
+          overflow: "hidden",
           backgroundColor: "background.default",
         }}
       >

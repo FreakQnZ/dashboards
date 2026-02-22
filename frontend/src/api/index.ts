@@ -1,20 +1,27 @@
 export { apiFetch } from "./client";
 export { useHealthCheck } from "./queries";
 export {
-  useToolsSummary,
-  useWeeklySchedule,
-  useTodayByMachine,
-  useMaintenanceTools,
-  useTopUsedTools,
-  useToolLifecycle,
-  useAvailableDates,
+  useToolsToday,
+  useToolsTomorrow,
+  useToolsForDate,
 } from "./toolsQueries";
 export type {
-  ToolsSummary,
-  WeeklyScheduleDay,
-  ScheduledTool,
-  MachineToolGroup,
-  MaintenanceTool,
-  TopUsedTool,
-  LifecycleTool,
+  ToolMachine,
+  ToolWithMachines,
+  ToolsByDayResponse,
 } from "./toolsQueries";
+export {
+  useToolSearch,
+  usePMEntries,
+  useAddPMEntry,
+  useUpdatePMEntry,
+  useConfirmMaintenance,
+  useDeletePMEntry,
+  usePMStatus,
+} from "./pmQueries";
+export type {
+  ToolSearchResult,
+  PMEntry,
+  MaintenanceRecord,
+  PMStatusEntry,
+} from "./pmQueries";

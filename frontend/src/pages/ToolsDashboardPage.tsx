@@ -1,35 +1,18 @@
-import { useState } from "react";
-import Grid from "@mui/material/Grid";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import Typography from "@mui/material/Typography";
-import Card from "@mui/material/Card";
-import CardContent from "@mui/material/CardContent";
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Paper from "@mui/material/Paper";
 import LinearProgress from "@mui/material/LinearProgress";
-import Alert from "@mui/material/Alert";
-import Tooltip from "@mui/material/Tooltip";
-import type { EChartsOption } from "echarts";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import { keyframes } from "@mui/system";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import EventIcon from "@mui/icons-material/Event";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
+import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 
-import { StatCard } from "@/components";
-import { Chart } from "@/charts";
-import {
-  useToolsSummary,
-  useWeeklySchedule,
-  useTodayByMachine,
-  useMaintenanceTools,
-  useTopUsedTools,
-  useToolLifecycle,
-  useAvailableDates,
-} from "@/api";
+import { useToolsToday, useToolsForDate, usePMStatus } from "@/api";
+import type { ToolWithMachines, PMStatusEntry } from "@/api";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -41,451 +24,585 @@ function formatNumber(n: number): string {
 
 function formatDate(d: string): string {
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatShortDate(d: string): string {
+  return new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
     weekday: "short",
     month: "short",
     day: "numeric",
   });
 }
 
-function getScrapColor(rate: number): "success" | "warning" | "error" {
-  if (rate < 0.5) return "success";
-  if (rate < 2) return "warning";
-  return "error";
+/** Return YYYY-MM-DD for today + N days */
+function dateOffset(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-// ── Component ──────────────────────────────────────────────────────
+/** Friendly label for an offset */
+function offsetLabel(offset: number): string {
+  if (offset === 1) return "Tomorrow";
+  if (offset === 2) return "Day After Tomorrow";
+  return formatShortDate(dateOffset(offset));
+}
 
-export default function ToolsDashboardPage() {
-  const [weekOffset, setWeekOffset] = useState(0);
+// ── Sub-components ─────────────────────────────────────────────────
 
-  const { data: dates } = useAvailableDates();
-  const refDate = dates?.latest;
-
-  const { data: summary, isLoading: summaryLoading } =
-    useToolsSummary(refDate);
-  const { data: weekly, isLoading: weeklyLoading } = useWeeklySchedule(
-    refDate,
-    weekOffset
-  );
-  const { data: todayData, isLoading: todayLoading } =
-    useTodayByMachine(refDate);
-  const { data: maintenance } = useMaintenanceTools(50);
-  const { data: topUsed } = useTopUsedTools(10);
-  const { data: lifecycle } = useToolLifecycle();
-
-  // ── Charts ───────────────────────────────────────────────────────
-
-  const topUsedChartOption: EChartsOption = {
-    tooltip: {
-      trigger: "axis",
-      axisPointer: { type: "shadow" },
-      formatter: (params: any) => {
-        const d = params[0];
-        return `${d.name}<br/>Total Produced: <b>${formatNumber(d.value)}</b>`;
-      },
-    },
-    grid: { left: 140, right: 20, top: 10, bottom: 30 },
-    xAxis: { type: "value", axisLabel: { formatter: (v: number) => formatNumber(v) } },
-    yAxis: {
-      type: "category",
-      data: [...(topUsed?.tools ?? [])].reverse().map((t) =>
-        t.toolNo.length > 20 ? t.toolNo.slice(0, 18) + "…" : t.toolNo
-      ),
-      axisLabel: { fontSize: 11 },
-    },
-    series: [
-      {
-        type: "bar",
-        data: [...(topUsed?.tools ?? [])].reverse().map((t) => t.totalProduced),
-        itemStyle: {
-          borderRadius: [0, 4, 4, 0],
-          color: "#1565c0",
-        },
-        barMaxWidth: 24,
-      },
-    ],
-  };
-
-  const lifecycleChartOption: EChartsOption = {
-    tooltip: {
-      formatter: (params: any) => {
-        const d = params.data;
-        return `<b>${d[3]}</b><br/>Days: ${d[0]}<br/>Strokes: ${formatNumber(d[1])}<br/>Scrap: ${d[2]}%`;
-      },
-    },
-    grid: { left: 70, right: 20, top: 20, bottom: 40 },
-    xAxis: {
-      type: "value",
-      name: "Days in Service",
-      nameLocation: "center",
-      nameGap: 25,
-    },
-    yAxis: {
-      type: "value",
-      name: "Total Strokes",
-      axisLabel: { formatter: (v: number) => formatNumber(v) },
-    },
-    series: [
-      {
-        type: "scatter",
-        symbolSize: (val: number[]) => Math.min(Math.max(val[2] * 6, 5), 40),
-        data: (lifecycle?.tools ?? []).map((t) => [
-          t.daysInService,
-          t.totalStrokes,
-          t.scrapRate,
-          t.toolNo,
-        ]),
-        itemStyle: {
-          color: (params: any) => {
-            const scrap = params.data[2];
-            if (scrap >= 2) return "#d32f2f";
-            if (scrap >= 0.5) return "#ed6c02";
-            return "#2e7d32";
-          },
-        },
-      },
-    ],
-  };
-
-  // ── Render ───────────────────────────────────────────────────────
-
-  const isLoading = summaryLoading || weeklyLoading || todayLoading;
-
+function StatCardCustom({
+  icon,
+  label,
+  value,
+  bgColor,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  bgColor: string;
+}) {
   return (
-    <>
-      <Typography variant="h4" sx={{ mb: 1 }}>
-        Tools Dashboard
-      </Typography>
-      {refDate && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Reference date: {formatDate(refDate)}
+    <Box
+      sx={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: 2,
+        bgcolor: "#fff",
+        borderRadius: 2,
+        px: 2.5,
+        py: 2,
+        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+      }}
+    >
+      <Box
+        sx={{
+          width: 44,
+          height: 44,
+          borderRadius: 1.5,
+          bgcolor: bgColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </Box>
+      <Box>
+        <Typography
+          variant="caption"
+          fontWeight={600}
+          color="text.secondary"
+          sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11 }}
+        >
+          {label}
         </Typography>
-      )}
+        <Typography variant="h5" fontWeight={700} lineHeight={1.2}>
+          {value}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
 
-      {isLoading && <LinearProgress sx={{ mb: 2 }} />}
-
-      {/* ── Stat Cards ──────────────────────────────────────────── */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Tools Today"
-            value={summary?.toolsToday ?? "—"}
-            subtitle={`${summary?.machinesToday ?? 0} machines`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Scheduled Qty Today"
-            value={formatNumber(summary?.scheduledQtyToday ?? 0)}
-            subtitle="pieces planned"
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Tools This Week"
-            value={summary?.toolsThisWeek ?? "—"}
-            subtitle={`${summary?.machinesThisWeek ?? 0} machines`}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard
-            title="Maintenance Alert"
-            value={summary?.toolsNeedingMaintenance ?? "—"}
-            subtitle="high-usage tools (400+ runs)"
-            sx={{
-              borderLeft: 4,
-              borderColor: "warning.main",
-            }}
-          />
-        </Grid>
-      </Grid>
-
-      {/* ── Today's Tools by Machine ────────────────────────────── */}
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Today's Tools by Machine
-      </Typography>
-      {todayData?.machines.length === 0 && (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          No tools scheduled for this date.
-        </Alert>
-      )}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {todayData?.machines.map((m) => (
-          <Grid key={m.machineId} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-            <Card
-              sx={{
-                height: "100%",
-                borderTop: 3,
-                borderColor: "primary.main",
-              }}
-            >
-              <CardContent>
-                <Typography variant="subtitle2" fontWeight={700} noWrap>
-                  {m.machineName}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  display="block"
-                  sx={{ mb: 1.5 }}
-                >
-                  {m.machineCapacity}
-                  {m.machineMake ? ` · ${m.machineMake}` : ""}
-                </Typography>
-                {m.tools.map((t) => (
-                  <Box
-                    key={t.toolId}
-                    sx={{
-                      mb: 1,
-                      p: 1,
-                      borderRadius: 1,
-                      bgcolor: "grey.50",
-                    }}
-                  >
-                    <Typography variant="body2" fontWeight={600} noWrap>
-                      {t.toolNo}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {t.partName} ({t.partNo})
-                    </Typography>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        gap: 0.5,
-                        mt: 0.5,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <Chip
-                        label={`${formatNumber(t.scheduledQty)} pcs`}
-                        size="small"
-                        color="primary"
-                        variant="outlined"
-                      />
-                      <Chip
-                        label={`${t.cavities} cav`}
-                        size="small"
-                        variant="outlined"
-                      />
-                      <Chip
-                        label={`${t.operations} op`}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </Box>
-                  </Box>
-                ))}
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      {/* ── Weekly Schedule ──────────────────────────────────────── */}
+function ToolCard({ tool }: { tool: ToolWithMachines }) {
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "grey.200",
+        borderRadius: 2,
+        p: 2,
+        mb: 1.5,
+        bgcolor: "#fff",
+      }}
+    >
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          mb: 2,
+          alignItems: "flex-start",
+          mb: 0.5,
         }}
       >
-        <Typography variant="h6">Weekly Schedule</Typography>
-        <ToggleButtonGroup
-          value={weekOffset}
-          exclusive
-          onChange={(_, v) => v !== null && setWeekOffset(v)}
-          size="small"
-        >
-          <ToggleButton value={0}>This Week</ToggleButton>
-          <ToggleButton value={1}>Next Week</ToggleButton>
-        </ToggleButtonGroup>
+        <Typography variant="subtitle2" fontWeight={700}>
+          {tool.toolNo}
+        </Typography>
+        {tool.machineCount > 1 && (
+          <Chip
+            label={`${tool.machineCount} machines`}
+            size="small"
+            color="primary"
+            variant="outlined"
+            sx={{ height: 22, fontSize: 11 }}
+          />
+        )}
       </Box>
-      <Card sx={{ mb: 4 }}>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Tool</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Component</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Machine</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Qty
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {weekly?.days.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    <Typography variant="body2" color="text.secondary" py={2}>
-                      No schedule data for this week.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {weekly?.days.map((day) =>
-                day.tools.map((tool, idx) => (
-                  <TableRow
-                    key={`${day.date}-${tool.toolId}-${idx}`}
-                    sx={{
-                      bgcolor: idx === 0 ? "grey.50" : "inherit",
-                    }}
-                  >
-                    <TableCell>
-                      {idx === 0 ? (
-                        <Box>
-                          <Typography variant="body2" fontWeight={600}>
-                            {formatDate(day.date)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {day.uniqueTools} tools · {day.uniqueMachines}{" "}
-                            machines
-                          </Typography>
-                        </Box>
-                      ) : (
-                        ""
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">{tool.toolNo}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
-                        {tool.partName}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {tool.partNo}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" noWrap>
-                        {tool.machineName}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">
-                      {formatNumber(tool.scheduledQty)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-
-      {/* ── Charts Row ──────────────────────────────────────────── */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Top 10 Most-Used Tools
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                By total pieces produced (all time)
-              </Typography>
-              <Chart option={topUsedChartOption} height={380} />
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 1 }}>
-                Tool Lifecycle
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                X: Days in service · Y: Total strokes · Size & color: Scrap
-                rate (
-                <Box component="span" sx={{ color: "success.main" }}>
-                  ●
-                </Box>{" "}
-                &lt;0.5%{" "}
-                <Box component="span" sx={{ color: "warning.main" }}>
-                  ●
-                </Box>{" "}
-                0.5–2%{" "}
-                <Box component="span" sx={{ color: "error.main" }}>
-                  ●
-                </Box>{" "}
-                &gt;2%)
-              </Typography>
-              <Chart option={lifecycleChartOption} height={380} />
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* ── Maintenance Table ───────────────────────────────────── */}
-      <Typography variant="h6" sx={{ mb: 2 }}>
-        Tool Maintenance Overview
+      <Typography variant="body2" color="text.secondary" noWrap>
+        {tool.partName}
       </Typography>
-      <Card>
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Tool No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Component</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Runs
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Total Strokes
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Scrap Rate
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Days in Service
-                </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Last Used</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {maintenance?.tools.map((t) => (
-                <TableRow key={t.toolId}>
-                  <TableCell>
-                    <Tooltip title={t.drawingNo || ""} arrow>
-                      <Typography variant="body2" fontWeight={500} noWrap>
-                        {t.toolNo}
-                      </Typography>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" noWrap>
-                      {t.partName}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t.partNo}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">{t.usageCount}</TableCell>
-                  <TableCell align="right">
-                    {formatNumber(t.totalStrokes)}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Chip
-                      label={`${t.scrapRate}%`}
-                      size="small"
-                      color={getScrapColor(t.scrapRate)}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">{t.daysInService}</TableCell>
-                  <TableCell>
-                    {t.lastUsed
-                      ? formatDate(t.lastUsed.split("T")[0] ?? t.lastUsed)
-                      : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Card>
-    </>
+      <Typography
+        variant="caption"
+        color="text.disabled"
+        sx={{ display: "block", mb: 1 }}
+      >
+        {tool.partNo}
+      </Typography>
+
+      {/* Machines */}
+      {tool.machines.map((m) => (
+        <Box
+          key={m.machineId}
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            py: 0.5,
+            px: 1,
+            my: 0.5,
+            bgcolor: "grey.50",
+            borderRadius: 1,
+          }}
+        >
+          <Typography variant="caption" fontWeight={600}>
+            {m.machineName}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {formatNumber(m.scheduledQty)} pcs
+          </Typography>
+        </Box>
+      ))}
+
+      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+        <Typography variant="caption" fontWeight={600} color="primary">
+          Total: {formatNumber(tool.totalScheduledQty)} pcs
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function MaintenanceCard({ entry }: { entry: PMStatusEntry }) {
+  const isCritical = entry.pmPercentage >= 100;
+  const barColor = isCritical ? "#d32f2f" : "#ed6c02";
+  const lifePercentage =
+    entry.toolLife > 0
+      ? Math.min(Math.round((entry.totalLifetimeStrokes / entry.toolLife) * 100), 100)
+      : 0;
+  const lifeBarColor = lifePercentage >= 80 ? "#d32f2f" : lifePercentage >= 50 ? "#ed6c02" : "#2e7d32";
+
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "grey.200",
+        borderRadius: 2,
+        p: 2,
+        mb: 1.5,
+        bgcolor: "#fff",
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          mb: 0.5,
+        }}
+      >
+        <Typography variant="subtitle2" fontWeight={700} sx={{ fontSize: 12 }}>
+          {entry.toolNo}
+        </Typography>
+        <Chip
+          label={isCritical ? "Critical" : "Warning"}
+          size="small"
+          sx={{
+            height: 22,
+            fontSize: 11,
+            fontWeight: 600,
+            bgcolor: isCritical ? "#fce4ec" : "#fff3e0",
+            color: isCritical ? "#d32f2f" : "#e65100",
+          }}
+        />
+      </Box>
+
+      {/* PM Strokes progress */}
+      <Box sx={{ mt: 1.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            PM Strokes
+          </Typography>
+          <Typography variant="caption" fontWeight={600}>
+            {formatNumber(entry.strokesSinceLastPM)} / {formatNumber(entry.pmStrokes)} ({entry.pmPercentage}%)
+          </Typography>
+        </Box>
+        <Box sx={{ height: 6, borderRadius: 3, bgcolor: "grey.200", overflow: "hidden" }}>
+          <Box
+            sx={{
+              height: "100%",
+              width: `${Math.min(entry.pmPercentage, 100)}%`,
+              bgcolor: barColor,
+              borderRadius: 3,
+            }}
+          />
+        </Box>
+      </Box>
+
+      {/* Tool Life progress */}
+      <Box sx={{ mt: 1.5 }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            Tool Life
+          </Typography>
+          <Typography variant="caption" fontWeight={600}>
+            {formatNumber(entry.totalLifetimeStrokes)} / {formatNumber(entry.toolLife)} ({lifePercentage}%)
+          </Typography>
+        </Box>
+        <Box sx={{ height: 6, borderRadius: 3, bgcolor: "grey.200", overflow: "hidden" }}>
+          <Box
+            sx={{
+              height: "100%",
+              width: `${lifePercentage}%`,
+              bgcolor: lifeBarColor,
+              borderRadius: 3,
+            }}
+          />
+        </Box>
+      </Box>
+
+      {entry.maintenanceCount > 0 && (
+        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1 }}>
+          Maintained {entry.maintenanceCount} time{entry.maintenanceCount > 1 ? "s" : ""}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+// ── Auto-scroll wrapper ────────────────────────────────────────────
+
+function AutoScrollColumn({
+  children,
+  itemCount,
+}: {
+  children: React.ReactNode;
+  itemCount: number;
+}) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [needsScroll, setNeedsScroll] = useState(false);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [duration, setDuration] = useState(20);
+
+  const measure = useCallback(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const ch = inner.scrollHeight;
+    const oh = outer.clientHeight;
+    setContentHeight(ch);
+    setNeedsScroll(ch > oh);
+    // speed: ~40px/s so more content = longer duration
+    setDuration(Math.max(10, ch / 40));
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure, itemCount]);
+
+  const scrollUp = needsScroll
+    ? keyframes`
+        0%   { transform: translateY(0); }
+        100% { transform: translateY(-${contentHeight}px); }
+      `
+    : undefined;
+
+  return (
+    <Box
+      ref={outerRef}
+      sx={{
+        flex: 1,
+        overflow: "hidden",
+        p: 1.5,
+        position: "relative",
+        /* fade-out masks at top & bottom so cards don't clip harshly */
+        ...(needsScroll && {
+          maskImage:
+            "linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%)",
+        }),
+        "&:hover .scroll-track": {
+          animationPlayState: "paused",
+        },
+      }}
+    >
+      {needsScroll ? (
+        <Box
+          className="scroll-track"
+          sx={{
+            display: "flex",
+            flexDirection: "column",
+            animation: `${scrollUp} ${duration}s linear infinite`,
+          }}
+        >
+          {/* Original */}
+          <Box ref={innerRef}>{children}</Box>
+          {/* Duplicate for seamless loop */}
+          <Box aria-hidden>{children}</Box>
+        </Box>
+      ) : (
+        <Box ref={innerRef}>{children}</Box>
+      )}
+    </Box>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────
+
+export default function ToolsDashboardPage() {
+  const [futureOffset, setFutureOffset] = useState(1); // 1 = tomorrow
+
+  const futureDate = useMemo(() => dateOffset(futureOffset), [futureOffset]);
+
+  const { data: todayData, isLoading: todayLoading } = useToolsToday();
+  const { data: futureData, isLoading: futureLoading } =
+    useToolsForDate(futureDate);
+  const { data: pmStatus = [], isLoading: pmLoading } = usePMStatus();
+
+  const isLoading = todayLoading || futureLoading || pmLoading;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+        p: 3,
+      }}
+    >
+      {/* ── Header ────────────────────────────────────────────── */}
+      <Box sx={{ flexShrink: 0, mb: 2 }}>
+        <Typography variant="h5" fontWeight={700}>
+          Tool Management Dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {todayData?.date ? formatDate(todayData.date) : "Loading..."}
+        </Typography>
+      </Box>
+
+      {isLoading && (
+        <LinearProgress sx={{ flexShrink: 0, mb: 1, borderRadius: 1 }} />
+      )}
+
+      {/* ── Stat Cards Row ────────────────────────────────────── */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          mb: 2,
+          flexShrink: 0,
+        }}
+      >
+        <StatCardCustom
+          icon={<CalendarTodayIcon fontSize="small" />}
+          label="Today's Tools"
+          value={todayData?.count ?? "—"}
+          bgColor="#1565c0"
+        />
+        <StatCardCustom
+          icon={<EventIcon fontSize="small" />}
+          label="Tomorrow's Tools"
+          value={futureData?.count ?? "—"}
+          bgColor="#2e7d32"
+        />
+        <StatCardCustom
+          icon={<WarningAmberIcon fontSize="small" />}
+          label="Maintenance"
+          value={pmStatus.length}
+          bgColor="#e65100"
+        />
+      </Box>
+
+      {/* ── 3-Column Section ──────────────────────────────────── */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 2,
+          flex: 1,
+          minHeight: 0, // critical for nested scroll to work
+        }}
+      >
+        {/* TODAY column */}
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: 2,
+            overflow: "hidden",
+            bgcolor: "#f5f7fa",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2.5,
+              py: 1.5,
+              bgcolor: "#1565c0",
+              flexShrink: 0,
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              color="#fff"
+              sx={{ textTransform: "uppercase", letterSpacing: 1 }}
+            >
+              Today
+            </Typography>
+          </Box>
+          <AutoScrollColumn itemCount={todayData?.tools?.length ?? 0}>
+            {!todayData?.tools?.length && !isLoading && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                textAlign="center"
+                py={4}
+              >
+                No tools scheduled for today.
+              </Typography>
+            )}
+            {todayData?.tools?.map((tool) => (
+              <ToolCard key={tool.toolId} tool={tool} />
+            ))}
+          </AutoScrollColumn>
+        </Box>
+
+        {/* TOMORROW / FUTURE column */}
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: 2,
+            overflow: "hidden",
+            bgcolor: "#f5f7fa",
+          }}
+        >
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1,
+              bgcolor: "#2e7d32",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <IconButton
+              size="small"
+              onClick={() => setFutureOffset((o) => Math.max(1, o - 1))}
+              disabled={futureOffset <= 1}
+              sx={{ color: "#fff", opacity: futureOffset <= 1 ? 0.3 : 1, p: 0.5 }}
+            >
+              <ArrowBackIosNewIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+            <Box sx={{ textAlign: "center", minWidth: 0 }}>
+              <Typography
+                variant="subtitle2"
+                fontWeight={700}
+                color="#fff"
+                sx={{ textTransform: "uppercase", letterSpacing: 1, lineHeight: 1.2 }}
+              >
+                {offsetLabel(futureOffset)}
+              </Typography>
+              {futureData?.date && (
+                <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.75)", fontSize: 10 }}>
+                  {formatShortDate(futureData.date)}
+                </Typography>
+              )}
+            </Box>
+            <IconButton
+              size="small"
+              onClick={() => setFutureOffset((o) => o + 1)}
+              sx={{ color: "#fff", p: 0.5 }}
+            >
+              <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Box>
+          <AutoScrollColumn itemCount={futureData?.tools?.length ?? 0}>
+            {!futureData?.tools?.length && !isLoading && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                textAlign="center"
+                py={4}
+              >
+                No tools scheduled for {offsetLabel(futureOffset).toLowerCase()}.
+              </Typography>
+            )}
+            {futureData?.tools?.map((tool) => (
+              <ToolCard key={tool.toolId} tool={tool} />
+            ))}
+          </AutoScrollColumn>
+        </Box>
+
+        {/* MAINTENANCE ALERT column */}
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: 2,
+            overflow: "hidden",
+            bgcolor: "#fffbf5",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2.5,
+              py: 1.5,
+              bgcolor: "#e65100",
+              flexShrink: 0,
+            }}
+          >
+            <Typography
+              variant="subtitle1"
+              fontWeight={700}
+              color="#fff"
+              sx={{ textTransform: "uppercase", letterSpacing: 1 }}
+            >
+              Maintenance Alert
+            </Typography>
+          </Box>
+          <AutoScrollColumn itemCount={pmStatus.length}>
+            {pmStatus.length === 0 && !isLoading && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                textAlign="center"
+                py={4}
+              >
+                No tools require maintenance.
+              </Typography>
+            )}
+            {pmStatus.map((entry) => (
+              <MaintenanceCard key={entry.id} entry={entry} />
+            ))}
+          </AutoScrollColumn>
+        </Box>
+      </Box>
+    </Box>
   );
 }

@@ -4,7 +4,12 @@ import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import { theme } from "./theme";
 import { DashboardLayout } from "./layouts";
-import { DashboardPage, LandingPage, ToolsDashboardPage } from "./pages";
+import {
+  DashboardPage,
+  LandingPage,
+  ToolsDashboardPage,
+  PreventiveMaintenancePage,
+} from "./pages";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,6 +33,14 @@ export default function App() {
               element={
                 <DashboardLayout>
                   <ToolsDashboardPage />
+                </DashboardLayout>
+              }
+            />
+            <Route
+              path="/preventive-maintenance"
+              element={
+                <DashboardLayout>
+                  <PreventiveMaintenancePage />
                 </DashboardLayout>
               }
             />

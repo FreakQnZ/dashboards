@@ -10,6 +10,7 @@ import BarChartIcon from "@mui/icons-material/BarChart";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import BuildIcon from "@mui/icons-material/Build";
+import HandymanIcon from "@mui/icons-material/Handyman";
 
 const dashboards = [
   {
@@ -18,6 +19,13 @@ const dashboards = [
     path: "/dashboards/tools",
     icon: <BuildIcon sx={{ fontSize: 48 }} />,
     color: "#d84315",
+  },
+  {
+    title: "Preventive Maintenance",
+    description: "Track tool maintenance schedules, stroke thresholds & maintenance history",
+    path: "/preventive-maintenance",
+    icon: <HandymanIcon sx={{ fontSize: 48 }} />,
+    color: "#00796b",
   },
   {
     title: "Production Overview",
@@ -56,7 +64,7 @@ export default function LandingPage() {
         Dashboards
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 5 }}>
-        Select a dashboard to view detailed analytics and metrics.
+        Select a dashboard or tool to get started.
       </Typography>
 
       <Grid container spacing={3}>
