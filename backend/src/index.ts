@@ -1,7 +1,9 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
 import { corsMiddleware, logger } from "./middleware";
 import { healthRoutes, toolsRoutes, pmRoutes } from "./routes";
 import { env } from "./env";
+import { join } from "path";
 
 const app = new Hono();
 
@@ -9,14 +11,27 @@ const app = new Hono();
 app.use("*", corsMiddleware);
 app.use("*", logger);
 
-// Routes
+// ================= API ROUTES =================
 app.route("/api/health", healthRoutes);
 app.route("/api/tools", toolsRoutes);
 app.route("/api/pm", pmRoutes);
 
-// Root
-app.get("/", (c) => {
-  return c.json({ message: "Manufacturing Dashboard API", version: "0.1.0" });
+// ================= FRONTEND STATIC =================
+
+// Serve static assets (JS, CSS, images)
+app.use(
+  "/*",
+  serveStatic({
+    root: join(process.cwd(), "../frontend/dist"),
+  })
+);
+
+// SPA fallback (important for React Router)
+app.get("*", async (c, next) => {
+  return serveStatic({
+    path: "index.html",
+    root: join(process.cwd(), "../frontend/dist"),
+  })(c, next);
 });
 
 console.log(`🚀 Server starting on port ${env.PORT}`);

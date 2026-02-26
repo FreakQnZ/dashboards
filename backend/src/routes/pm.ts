@@ -17,8 +17,12 @@ pm.get("/", async (c) => {
   return c.json(entries);
 });
 
-// GET /status — PM entries that have reached ≥80% of pmStrokes threshold
+// GET /status — PM entries that have reached a given threshold of pmStrokes
+// ?threshold=N (default 80) — only return tools with pmPercentage >= N
 pm.get("/status", async (c) => {
+  const thresholdParam = c.req.query("threshold");
+  const threshold = thresholdParam !== undefined ? Number(thresholdParam) : 80;
+
   const entries = await getEntries();
   if (entries.length === 0) return c.json([]);
 
@@ -65,8 +69,8 @@ pm.get("/status", async (c) => {
         ? Math.round((strokesSinceLastPM / entry.pmStrokes) * 100)
         : 0;
 
-    // Only include tools that have reached ≥80% of PM threshold
-    if (pmPercentage >= 80) {
+    // Only include tools that have reached the specified threshold
+    if (pmPercentage >= threshold) {
       results.push({
         id: entry.id,
         toolId: entry.toolId,

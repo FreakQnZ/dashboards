@@ -128,3 +128,12 @@ export function usePMStatus() {
     refetchInterval: 60_000, // refresh every minute
   });
 }
+
+/** Fetch all PM entries with pmPercentage >= 50% (for stat cards) */
+export function usePMStatusAll() {
+  return useQuery({
+    queryKey: ["pm-status-all"],
+    queryFn: () => apiFetch<PMStatusEntry[]>("/api/pm/status?threshold=0"),
+    refetchInterval: 60_000,
+  });
+}

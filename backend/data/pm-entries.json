@@ -30,7 +30,7 @@
     "toolId": 1638,
     "toolNo": "F701030083/01/PT01",
     "toolLife": 23000000,
-    "pmStrokes": 550000,
+    "pmStrokes": 750000,
     "maintenanceHistory": [],
     "createdAt": "2026-02-17T10:47:10.053Z"
   },
@@ -51,5 +51,14 @@
     "pmStrokes": 40000,
     "maintenanceHistory": [],
     "createdAt": "2026-02-21T14:02:50.047Z"
+  },
+  {
+    "id": "6dd2681d-d793-46cb-b86e-32d127c9d6d9",
+    "toolId": 2167,
+    "toolNo": "11-195307-000",
+    "toolLife": 10000000,
+    "pmStrokes": 120000,
+    "maintenanceHistory": [],
+    "createdAt": "2026-02-15T14:25:22.497Z"
   }
 ]

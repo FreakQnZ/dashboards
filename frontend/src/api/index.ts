@@ -4,11 +4,13 @@ export {
   useToolsToday,
   useToolsTomorrow,
   useToolsForDate,
+  useToolsCount,
 } from "./toolsQueries";
 export type {
   ToolMachine,
   ToolWithMachines,
   ToolsByDayResponse,
+  ToolsCountResponse,
 } from "./toolsQueries";
 export {
   useToolSearch,
@@ -18,6 +20,7 @@ export {
   useConfirmMaintenance,
   useDeletePMEntry,
   usePMStatus,
+  usePMStatusAll,
 } from "./pmQueries";
 export type {
   ToolSearchResult,

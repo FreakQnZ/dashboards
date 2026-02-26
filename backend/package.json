@@ -9,6 +9,7 @@
     "db:generate-types": "bun run src/db/generate-types.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^1.19.9",
     "hono": "^4.11.9",
     "kysely": "^0.28.11",
     "mysql2": "^3.17.1",

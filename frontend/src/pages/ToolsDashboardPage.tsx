@@ -7,11 +7,14 @@ import IconButton from "@mui/material/IconButton";
 import { keyframes } from "@mui/system";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import EventIcon from "@mui/icons-material/Event";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 
-import { useToolsToday, useToolsForDate, usePMStatus } from "@/api";
+import BuildIcon from "@mui/icons-material/Build";
+import ReportProblemIcon from "@mui/icons-material/ReportProblem";
+import ErrorIcon from "@mui/icons-material/Error";
+import { useToolsToday, useToolsForDate, usePMStatus, usePMStatusAll, useToolsCount } from "@/api";
 import type { ToolWithMachines, PMStatusEntry } from "@/api";
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -72,18 +75,18 @@ function StatCardCustom({
         flex: 1,
         display: "flex",
         alignItems: "center",
-        gap: 2,
+        gap: 1.5,
         bgcolor: "#fff",
         borderRadius: 2,
-        px: 2.5,
-        py: 2,
+        px: 2,
+        py: 1,
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
       <Box
         sx={{
-          width: 44,
-          height: 44,
+          width: 36,
+          height: 36,
           borderRadius: 1.5,
           bgcolor: bgColor,
           display: "flex",
@@ -91,100 +94,194 @@ function StatCardCustom({
           justifyContent: "center",
           color: "#fff",
           flexShrink: 0,
+          "& .MuiSvgIcon-root": { fontSize: 20 },
         }}
       >
         {icon}
       </Box>
-      <Box>
-        <Typography
-          variant="caption"
-          fontWeight={600}
-          color="text.secondary"
-          sx={{ textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11 }}
-        >
+      <Typography variant="h6" fontWeight={700} lineHeight={1} sx={{ flexShrink: 0 }}>
+        {value}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        fontWeight={500}
+        sx={{ lineHeight: 1.2 }}
+      >
+        {label}
+      </Typography>
+    </Box>
+  );
+}
+
+/** Flat entry: one card per tool × machine schedule */
+interface ToolScheduleEntry {
+  toolId: number;
+  toolNo: string;
+  partNo: string;
+  partName: string;
+  machineId: number;
+  machineName: string;
+  scheduledQty: number;
+}
+
+/** Flatten grouped tool data into one entry per machine schedule */
+function flattenTools(tools: ToolWithMachines[]): ToolScheduleEntry[] {
+  return tools.flatMap((t) =>
+    t.machines.map((m) => ({
+      toolId: t.toolId,
+      toolNo: t.toolNo,
+      partNo: t.partNo,
+      partName: t.partName,
+      machineId: m.machineId,
+      machineName: m.machineName,
+      scheduledQty: m.scheduledQty,
+    })),
+  );
+}
+
+/** Tiny inline progress bar */
+function MiniBar({
+  value,
+  max,
+  pct,
+  color,
+  label,
+}: {
+  value: number;
+  max: number;
+  pct: number;
+  color: string;
+  label: string;
+}) {
+  return (
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.15 }}>
+        <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", lineHeight: 1 }}>
           {label}
         </Typography>
-        <Typography variant="h5" fontWeight={700} lineHeight={1.2}>
-          {value}
+        <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 600, lineHeight: 1 }}>
+          {formatNumber(value)}/{formatNumber(max)} ({pct}%)
         </Typography>
+      </Box>
+      <Box sx={{ height: 3, borderRadius: 2, bgcolor: "grey.200", overflow: "hidden" }}>
+        <Box sx={{ height: "100%", width: `${Math.min(pct, 100)}%`, bgcolor: color, borderRadius: 2 }} />
       </Box>
     </Box>
   );
 }
 
-function ToolCard({ tool }: { tool: ToolWithMachines }) {
+const blinkRed = keyframes`
+  0%, 100% { border-color: #d32f2f; }
+  50% { border-color: transparent; }
+`;
+
+function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMStatusEntry }) {
+  const hasPM = !!pmEntry;
+  const pmPct = pmEntry?.pmPercentage ?? 0;
+  const lifePct = pmEntry
+    ? pmEntry.toolLife > 0
+      ? Math.min(Math.round((pmEntry.totalLifetimeStrokes / pmEntry.toolLife) * 100), 100)
+      : 0
+    : 0;
+
+  // Projected PM % after current scheduled production
+  const projectedPmPct = hasPM && pmEntry!.pmStrokes > 0
+    ? Math.round(((pmEntry!.strokesSinceLastPM + entry.scheduledQty) / pmEntry!.pmStrokes) * 100)
+    : 0;
+
+  const willCross100 = hasPM && projectedPmPct >= 100;
+  const willReach80 = hasPM && projectedPmPct >= 80 && !willCross100;
+
+  const pmBarColor = pmPct >= 80 ? "#d32f2f" : pmPct >= 50 ? "#ed6c02" : "#2e7d32";
+  const lifeBarColor = lifePct >= 80 ? "#d32f2f" : lifePct >= 50 ? "#ed6c02" : "#2e7d32";
+
   return (
     <Box
       sx={{
-        border: "1px solid",
-        borderColor: "grey.200",
-        borderRadius: 2,
-        p: 2,
-        mb: 1.5,
+        border: "2px solid",
+        borderColor: willCross100 ? "#d32f2f" : willReach80 ? "#f9a825" : "grey.200",
+        borderRadius: 1.5,
+        px: 1.5,
+        py: 0.75,
+        mb: 0.75,
         bgcolor: "#fff",
+        ...(willCross100 && {
+          animation: `${blinkRed} 1s ease-in-out infinite`,
+        }),
       }}
     >
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          mb: 0.5,
-        }}
-      >
-        <Typography variant="subtitle2" fontWeight={700}>
-          {tool.toolNo}
+      {/* Row 1: Tool No | Machine | Qty */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.25 }}>
+        <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: 13 }}>
+          {entry.toolNo}
         </Typography>
-        {tool.machineCount > 1 && (
-          <Chip
-            label={`${tool.machineCount} machines`}
-            size="small"
-            color="primary"
-            variant="outlined"
-            sx={{ height: 22, fontSize: 11 }}
-          />
-        )}
-      </Box>
-      <Typography variant="body2" color="text.secondary" noWrap>
-        {tool.partName}
-      </Typography>
-      <Typography
-        variant="caption"
-        color="text.disabled"
-        sx={{ display: "block", mb: 1 }}
-      >
-        {tool.partNo}
-      </Typography>
-
-      {/* Machines */}
-      {tool.machines.map((m) => (
+        <Box sx={{ flex: 1 }} />
         <Box
-          key={m.machineId}
           sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            py: 0.5,
-            px: 1,
-            my: 0.5,
-            bgcolor: "grey.50",
-            borderRadius: 1,
+            bgcolor: "grey.100",
+            borderRadius: 0.75,
+            px: 0.75,
+            py: 0.15,
+            flexShrink: 0,
           }}
         >
-          <Typography variant="caption" fontWeight={600}>
-            {m.machineName}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {formatNumber(m.scheduledQty)} pcs
+          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, lineHeight: 1 }}>
+            {entry.machineName}
           </Typography>
         </Box>
-      ))}
-
-      <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
-        <Typography variant="caption" fontWeight={600} color="primary">
-          Total: {formatNumber(tool.totalScheduledQty)} pcs
+        <Typography
+          variant="caption"
+          fontWeight={700}
+          color="primary"
+          sx={{ flexShrink: 0, fontSize: 12 }}
+        >
+          {formatNumber(entry.scheduledQty)}
         </Typography>
       </Box>
+
+      {/* Row 2: Part name + part number (full width) */}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontSize: 10, display: "block", lineHeight: 1.3, mb: 0.4 }}
+      >
+        {entry.partName}
+        <Typography component="span" variant="caption" color="text.disabled" sx={{ fontSize: 10, ml: 0.5 }}>
+          ({entry.partNo})
+        </Typography>
+      </Typography>
+
+      {/* Row 3: PM strokes + Tool life mini bars */}
+      {hasPM ? (
+        <Box sx={{ display: "flex", gap: 1.5 }}>
+          <MiniBar
+            label="PM"
+            value={pmEntry!.strokesSinceLastPM}
+            max={pmEntry!.pmStrokes}
+            pct={pmPct}
+            color={pmBarColor}
+          />
+          <MiniBar
+            label="Life"
+            value={pmEntry!.totalLifetimeStrokes}
+            max={pmEntry!.toolLife}
+            pct={lifePct}
+            color={lifeBarColor}
+          />
+        </Box>
+      ) : (
+        <Box sx={{ display: "flex", gap: 1.5 }}>
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography variant="caption" sx={{ fontSize: 9, color: "text.disabled" }}>PM</Typography>
+            <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>∞</Typography>
+          </Box>
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography variant="caption" sx={{ fontSize: 9, color: "text.disabled" }}>Life</Typography>
+            <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>∞</Typography>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -378,8 +475,24 @@ export default function ToolsDashboardPage() {
   const { data: futureData, isLoading: futureLoading } =
     useToolsForDate(futureDate);
   const { data: pmStatus = [], isLoading: pmLoading } = usePMStatus();
+  const { data: pmAll = [], isLoading: pmAllLoading } = usePMStatusAll();
+  const { data: toolsCountData, isLoading: toolsCountLoading } = useToolsCount();
 
-  const isLoading = todayLoading || futureLoading || pmLoading;
+  const isLoading = todayLoading || futureLoading || pmLoading || pmAllLoading || toolsCountLoading;
+
+  // Build a lookup map: toolId → PMStatusEntry
+  const pmByToolId = useMemo(() => {
+    const map = new Map<number, PMStatusEntry>();
+    for (const entry of pmAll) map.set(entry.toolId, entry);
+    return map;
+  }, [pmAll]);
+
+  // Compute PM bands
+  const totalTools = toolsCountData?.total ?? 0;
+  const warningTools = pmAll.filter(
+    (t) => t.pmPercentage >= 50 && t.pmPercentage < 80
+  ).length;
+  const criticalTools = pmAll.filter((t) => t.pmPercentage >= 80).length;
 
   return (
     <Box
@@ -392,13 +505,109 @@ export default function ToolsDashboardPage() {
       }}
     >
       {/* ── Header ────────────────────────────────────────────── */}
-      <Box sx={{ flexShrink: 0, mb: 2 }}>
-        <Typography variant="h5" fontWeight={700}>
-          Tool Management Dashboard
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {todayData?.date ? formatDate(todayData.date) : "Loading..."}
-        </Typography>
+      <Box
+        sx={{
+          flexShrink: 0,
+          mb: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Box sx={{ flexShrink: 0 }}>
+          <Typography variant="h5" fontWeight={700}>
+            Tool Management Dashboard
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {todayData?.date ? formatDate(todayData.date) : "Loading..."}
+          </Typography>
+        </Box>
+
+        {/* PM summary badges */}
+        <Box sx={{ display: "flex", gap: 2, alignItems: "center", flex: 1, justifyContent: "flex-end", ml: 3 }}>
+          {/* Total PM Tools */}
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "#e3f2fd",
+              borderRadius: 2,
+              px: 2.5,
+              py: 1.5,
+            }}
+          >
+            <BuildIcon sx={{ fontSize: 22, color: "#1565c0" }} />
+            <Box>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+              >
+                Total Tools
+              </Typography>
+              <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
+                {totalTools}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* 50-80% warning band */}
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "#fff8e1",
+              borderRadius: 2,
+              px: 2.5,
+              py: 1.5,
+              border: "1px solid #f9a825",
+            }}
+          >
+            <ReportProblemIcon sx={{ fontSize: 22, color: "#f9a825" }} />
+            <Box>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+              >
+                PM 50–80%
+              </Typography>
+              <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#f9a825">
+                {warningTools}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* ≥80% critical band */}
+          <Box
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "#fce4ec",
+              borderRadius: 2,
+              px: 2.5,
+              py: 1.5,
+              border: "1px solid #d32f2f",
+            }}
+          >
+            <ErrorIcon sx={{ fontSize: 22, color: "#d32f2f" }} />
+            <Box>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+              >
+                PM ≥80% (Alert)
+              </Typography>
+              <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#d32f2f">
+                {criticalTools}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
       </Box>
 
       {isLoading && (
@@ -471,7 +680,7 @@ export default function ToolsDashboardPage() {
               Today
             </Typography>
           </Box>
-          <AutoScrollColumn itemCount={todayData?.tools?.length ?? 0}>
+          <AutoScrollColumn itemCount={todayData?.tools ? flattenTools(todayData.tools).length : 0}>
             {!todayData?.tools?.length && !isLoading && (
               <Typography
                 variant="body2"
@@ -482,8 +691,8 @@ export default function ToolsDashboardPage() {
                 No tools scheduled for today.
               </Typography>
             )}
-            {todayData?.tools?.map((tool) => (
-              <ToolCard key={tool.toolId} tool={tool} />
+            {todayData?.tools && flattenTools(todayData.tools).map((entry) => (
+              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolId.get(entry.toolId)} />
             ))}
           </AutoScrollColumn>
         </Box>
@@ -541,7 +750,7 @@ export default function ToolsDashboardPage() {
               <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
             </IconButton>
           </Box>
-          <AutoScrollColumn itemCount={futureData?.tools?.length ?? 0}>
+          <AutoScrollColumn itemCount={futureData?.tools ? flattenTools(futureData.tools).length : 0}>
             {!futureData?.tools?.length && !isLoading && (
               <Typography
                 variant="body2"
@@ -552,8 +761,8 @@ export default function ToolsDashboardPage() {
                 No tools scheduled for {offsetLabel(futureOffset).toLowerCase()}.
               </Typography>
             )}
-            {futureData?.tools?.map((tool) => (
-              <ToolCard key={tool.toolId} tool={tool} />
+            {futureData?.tools && flattenTools(futureData.tools).map((entry) => (
+              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolId.get(entry.toolId)} />
             ))}
           </AutoScrollColumn>
         </Box>

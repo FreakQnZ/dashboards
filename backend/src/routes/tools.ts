@@ -119,6 +119,17 @@ async function getToolsForDate(
   };
 }
 
+// GET /count - total number of active tools in the database
+tools.get("/count", async (c) => {
+  const result = await db
+    .selectFrom("components_tool")
+    .select(sql<number>`COUNT(*)`.as("total"))
+    .where("CT_ACTIVEYN", "=", "Y")
+    .executeTakeFirst();
+
+  return c.json({ total: Number(result?.total ?? 0) });
+});
+
 // GET /search - search tools by tool number
 tools.get("/search", async (c) => {
   const q = c.req.query("q")?.trim() ?? "";

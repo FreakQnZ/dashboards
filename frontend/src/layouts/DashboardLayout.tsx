@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
@@ -37,7 +37,18 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [appBarVisible, setAppBarVisible] = useState(false);
+  const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useLocation();
+
+  const showBar = () => {
+    if (hideTimeout.current) clearTimeout(hideTimeout.current);
+    setAppBarVisible(true);
+  };
+
+  const hideBar = () => {
+    hideTimeout.current = setTimeout(() => setAppBarVisible(false), 300);
+  };
 
   const drawerContent = (
     <>
@@ -61,8 +72,30 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
-      {/* App bar */}
-      <AppBar position="fixed" sx={{ zIndex: (t) => t.zIndex.drawer + 1 }}>
+      {/* Invisible hover trigger zone at the top of the screen */}
+      <Box
+        onMouseEnter={showBar}
+        sx={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "6px",
+          zIndex: (t) => t.zIndex.drawer + 2,
+        }}
+      />
+
+      {/* App bar — slides down from above on hover */}
+      <AppBar
+        position="fixed"
+        onMouseEnter={showBar}
+        onMouseLeave={hideBar}
+        sx={{
+          zIndex: (t) => t.zIndex.drawer + 1,
+          transform: appBarVisible ? "translateY(0)" : "translateY(-100%)",
+          transition: "transform 0.3s ease",
+        }}
+      >
         <Toolbar>
           <IconButton
             color="inherit"
@@ -97,8 +130,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           flexGrow: 1,
           display: "flex",
           flexDirection: "column",
-          mt: "64px",
-          height: "calc(100vh - 64px)",
+          height: "100vh",
           overflow: "hidden",
           backgroundColor: "background.default",
         }}

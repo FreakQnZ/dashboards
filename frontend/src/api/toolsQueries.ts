@@ -28,7 +28,18 @@ export interface ToolsByDayResponse {
   tools: ToolWithMachines[];
 }
 
+export interface ToolsCountResponse {
+  total: number;
+}
+
 // ── Hooks ──────────────────────────────────────────────────────────
+
+export function useToolsCount() {
+  return useQuery({
+    queryKey: ["tools", "count"],
+    queryFn: () => apiFetch<ToolsCountResponse>("/api/tools/count"),
+  });
+}
 
 function withDateQuery(path: string, date?: string) {
   if (!date) return path;
