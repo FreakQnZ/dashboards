@@ -5,10 +5,12 @@ import CssBaseline from "@mui/material/CssBaseline";
 import { theme } from "./theme";
 import { DashboardLayout } from "./layouts";
 import {
-  DashboardPage,
   LandingPage,
   ToolsDashboardPage,
   PreventiveMaintenancePage,
+  LifeReportPage,
+  ProductionDashboardPage,
+  RMVariancePage,
 } from "./pages";
 
 const queryClient = new QueryClient({
@@ -45,10 +47,26 @@ export default function App() {
               }
             />
             <Route
-              path="/dashboards/:dashboardId"
+              path="/life-report"
               element={
                 <DashboardLayout>
-                  <DashboardPage />
+                  <LifeReportPage />
+                </DashboardLayout>
+              }
+            />
+            <Route
+              path="/production"
+              element={
+                <DashboardLayout>
+                  <ProductionDashboardPage />
+                </DashboardLayout>
+              }
+            />
+            <Route
+              path="/rm-variance"
+              element={
+                <DashboardLayout>
+                  <RMVariancePage />
                 </DashboardLayout>
               }
             />

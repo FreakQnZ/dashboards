@@ -120,6 +120,27 @@ export interface CustomerTable {
   CU_Name: string | null;
 }
 
+// ── tool_life ──────────────────────────────────────────────────────
+export interface ToolLifeTable {
+  TL_tool_id: number;
+  TL_tool_number: string;
+  TL_life_span: number;
+  TL_spm: number;
+  TL_preventive_maintenance_strokes: number;
+  TL_created_at: Generated<string>;
+}
+
+// ── preventive_maintenance ─────────────────────────────────────────
+export interface PreventiveMaintenanceTable {
+  PM_id: Generated<number>;
+  PM_tool_id: number;
+  PM_tool_number: string;
+  PM_date: string;
+  PM_current_stroke: number;
+  PM_next_stroke: number;
+  PM_maintenance_attachment: string | null;
+}
+
 // ── Database aggregate ─────────────────────────────────────────────
 export interface Database {
   scheduled_production: ScheduledProductionTable;
@@ -129,4 +150,6 @@ export interface Database {
   production_details: ProductionDetailsTable;
   supplier: SupplierTable;
   customer: CustomerTable;
+  tool_life: ToolLifeTable;
+  preventive_maintenance: PreventiveMaintenanceTable;
 }

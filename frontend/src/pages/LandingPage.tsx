@@ -5,12 +5,11 @@ import CardActionArea from "@mui/material/CardActionArea";
 import CardContent from "@mui/material/CardContent";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import BarChartIcon from "@mui/icons-material/BarChart";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import InventoryIcon from "@mui/icons-material/Inventory";
 import BuildIcon from "@mui/icons-material/Build";
 import HandymanIcon from "@mui/icons-material/Handyman";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import FactoryIcon from "@mui/icons-material/Factory";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 
 const dashboards = [
   {
@@ -28,32 +27,25 @@ const dashboards = [
     color: "#00796b",
   },
   {
-    title: "Production Overview",
-    description: "Key production KPIs, weekly output, and line efficiency",
-    path: "/dashboards/production",
-    icon: <DashboardIcon sx={{ fontSize: 48 }} />,
+    title: "Life Report",
+    description: "Tool life tracking, stroke analysis & lifecycle reporting",
+    path: "/life-report",
+    icon: <AssessmentIcon sx={{ fontSize: 48 }} />,
     color: "#1976d2",
   },
   {
-    title: "Quality Metrics",
-    description: "Yield rates, defect tracking, and quality trends",
-    path: "/dashboards/quality",
-    icon: <BarChartIcon sx={{ fontSize: 48 }} />,
-    color: "#2e7d32",
+    title: "Production",
+    description: "Daily production tracking, schedule variance & raw material analysis",
+    path: "/production",
+    icon: <FactoryIcon sx={{ fontSize: 48 }} />,
+    color: "#7b1fa2",
   },
   {
-    title: "Downtime Analysis",
-    description: "Equipment downtime, incidents, and root cause analysis",
-    path: "/dashboards/downtime",
-    icon: <ShowChartIcon sx={{ fontSize: 48 }} />,
-    color: "#ed6c02",
-  },
-  {
-    title: "Inventory Status",
-    description: "Raw materials, WIP levels, and finished goods",
-    path: "/dashboards/inventory",
-    icon: <InventoryIcon sx={{ fontSize: 48 }} />,
-    color: "#9c27b0",
+    title: "RM Variance",
+    description: "Raw material variance analysis — scheduled vs actual consumption by plant",
+    path: "/rm-variance",
+    icon: <CompareArrowsIcon sx={{ fontSize: 48 }} />,
+    color: "#e65100",
   },
 ];
 

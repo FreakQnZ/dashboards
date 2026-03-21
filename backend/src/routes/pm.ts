@@ -1,87 +1,101 @@
 import { Hono } from "hono";
 import { sql } from "kysely";
 import { db } from "../db";
+import { env } from "../env";
+import { mkdirSync, existsSync } from "fs";
+import { join, extname } from "path";
 import {
   getEntries,
   addEntry,
   updateEntry,
   confirmMaintenance,
   deleteEntry,
+  getStrokeInfo,
+  getToolStrokes,
 } from "../db/pmStore";
 
 const pm = new Hono();
 
-// GET / — list all PM entries
+// GET / — list all PM entries (tool_life + maintenance history)
 pm.get("/", async (c) => {
   const entries = await getEntries();
   return c.json(entries);
 });
 
-// GET /status — PM entries that have reached a given threshold of pmStrokes
+// GET /status — PM entries relative to their next PM stroke target
 // ?threshold=N (default 80) — only return tools with pmPercentage >= N
 pm.get("/status", async (c) => {
   const thresholdParam = c.req.query("threshold");
   const threshold = thresholdParam !== undefined ? Number(thresholdParam) : 80;
 
-  const entries = await getEntries();
-  if (entries.length === 0) return c.json([]);
-
-  const results: Array<{
-    id: string;
+  // Single efficient query: join tool_life with latest PM entry + aggregated strokes
+  const rows = await sql<{
     toolId: number;
     toolNo: string;
     toolLife: number;
+    spm: number;
     pmStrokes: number;
-    strokesSinceLastPM: number;
-    pmPercentage: number;
-    totalLifetimeStrokes: number;
+    pmCurrentStroke: number;
+    nextStroke: number;
     lastMaintenanceDate: string | null;
+    totalLifetimeStrokes: number;
     maintenanceCount: number;
-  }> = [];
+  }>`
+    SELECT
+      tl.TL_tool_id          AS toolId,
+      tl.TL_tool_number      AS toolNo,
+      tl.TL_life_span        AS toolLife,
+      tl.TL_spm              AS spm,
+      tl.TL_preventive_maintenance_strokes AS pmStrokes,
+      pm.PM_current_stroke   AS pmCurrentStroke,
+      pm.PM_next_stroke      AS nextStroke,
+      pm.PM_date             AS lastMaintenanceDate,
+      COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes,
+      COALESCE(pm_count.cnt, 0)         AS maintenanceCount
+    FROM tool_life tl
+    INNER JOIN preventive_maintenance pm
+      ON pm.PM_id = (
+        SELECT MAX(pm2.PM_id)
+        FROM preventive_maintenance pm2
+        WHERE pm2.PM_tool_id = tl.TL_tool_id
+      )
+    LEFT JOIN (
+      SELECT PD_TOOLID, SUM(PD_PRODQTY) AS totalStrokes
+      FROM production_details
+      GROUP BY PD_TOOLID
+    ) strokes ON strokes.PD_TOOLID = tl.TL_tool_id
+    LEFT JOIN (
+      SELECT PM_tool_id, COUNT(*) AS cnt
+      FROM preventive_maintenance
+      GROUP BY PM_tool_id
+    ) pm_count ON pm_count.PM_tool_id = tl.TL_tool_id
+  `.execute(db);
 
-  for (const entry of entries) {
-    // Determine the "since" date: last maintenance or createdAt
-    const lastMaintenance =
-      entry.maintenanceHistory.length > 0
-        ? entry.maintenanceHistory[entry.maintenanceHistory.length - 1].date
-        : null;
-    const sinceDate = lastMaintenance ?? entry.createdAt;
+  const results = [];
 
-    // Query strokes since last PM
-    const sinceResult = await db
-      .selectFrom("production_details")
-      .select(sql<number>`COALESCE(SUM(PD_PRODQTY), 0)`.as("totalQty"))
-      .where("PD_TOOLID", "=", entry.toolId)
-      .where("PD_DATE", ">=", sinceDate)
-      .executeTakeFirst();
-
-    // Query total lifetime strokes
-    const lifetimeResult = await db
-      .selectFrom("production_details")
-      .select(sql<number>`COALESCE(SUM(PD_PRODQTY), 0)`.as("totalQty"))
-      .where("PD_TOOLID", "=", entry.toolId)
-      .executeTakeFirst();
-
-    const strokesSinceLastPM = Number(sinceResult?.totalQty ?? 0);
-    const totalLifetimeStrokes = Number(lifetimeResult?.totalQty ?? 0);
+  for (const row of rows.rows) {
+    const pmCurrentStroke = Number(row.pmCurrentStroke);
+    const nextStroke = Number(row.nextStroke);
+    const totalLifetimeStrokes = Number(row.totalLifetimeStrokes);
+    const range = nextStroke - pmCurrentStroke;
     const pmPercentage =
-      entry.pmStrokes > 0
-        ? Math.round((strokesSinceLastPM / entry.pmStrokes) * 100)
+      range > 0
+        ? Math.round(((totalLifetimeStrokes - pmCurrentStroke) / range) * 100)
         : 0;
 
-    // Only include tools that have reached the specified threshold
     if (pmPercentage >= threshold) {
       results.push({
-        id: entry.id,
-        toolId: entry.toolId,
-        toolNo: entry.toolNo,
-        toolLife: entry.toolLife,
-        pmStrokes: entry.pmStrokes,
-        strokesSinceLastPM,
-        pmPercentage,
+        toolId: Number(row.toolId),
+        toolNo: row.toolNo,
+        toolLife: Number(row.toolLife),
+        spm: Number(row.spm),
+        pmStrokes: Number(row.pmStrokes),
+        pmCurrentStroke,
+        nextStroke,
         totalLifetimeStrokes,
-        lastMaintenanceDate: lastMaintenance,
-        maintenanceCount: entry.maintenanceHistory.length,
+        pmPercentage,
+        lastMaintenanceDate: row.lastMaintenanceDate ?? null,
+        maintenanceCount: Number(row.maintenanceCount),
       });
     }
   }
@@ -89,66 +103,146 @@ pm.get("/status", async (c) => {
   return c.json(results);
 });
 
-// POST / — add a new PM entry
+// GET /tool-strokes/:toolId — get total strokes for any tool (no tool_life entry required)
+pm.get("/tool-strokes/:toolId", async (c) => {
+  const toolId = Number(c.req.param("toolId"));
+  const totalStrokes = await getToolStrokes(toolId);
+  return c.json({ totalStrokes });
+});
+
+// POST / — add a new tool_life entry (optionally with initial PM record)
 pm.post("/", async (c) => {
   const body = await c.req.json<{
     toolId: number;
     toolNo: string;
     toolLife: number;
+    spm: number;
     pmStrokes: number;
+    nextStroke?: number;
   }>();
 
   if (!body.toolId || !body.toolNo || !body.toolLife || !body.pmStrokes) {
-    return c.json({ message: "toolId, toolNo, toolLife, and pmStrokes are required" }, 400);
+    return c.json({ message: "toolId, toolNo, toolLife, spm, and pmStrokes are required" }, 400);
   }
 
   try {
-    const entry = await addEntry(body.toolId, body.toolNo, body.toolLife, body.pmStrokes);
+    const entry = await addEntry(body.toolId, body.toolNo, body.toolLife, body.spm ?? 0, body.pmStrokes, body.nextStroke);
     return c.json(entry, 201);
   } catch (err: any) {
     return c.json({ message: err.message }, 409);
   }
 });
 
-// PATCH /:id — update tool life and/or PM strokes
-pm.patch("/:id", async (c) => {
-  const { id } = c.req.param();
-  const body = await c.req.json<{ toolLife?: number; pmStrokes?: number }>();
+// PATCH /:toolId — update tool life, PM strokes, and/or SPM
+pm.patch("/:toolId", async (c) => {
+  const toolId = Number(c.req.param("toolId"));
+  const body = await c.req.json<{ toolLife?: number; pmStrokes?: number; spm?: number }>();
 
-  if (body.toolLife === undefined && body.pmStrokes === undefined) {
-    return c.json({ message: "At least one of toolLife or pmStrokes is required" }, 400);
+  if (body.toolLife === undefined && body.pmStrokes === undefined && body.spm === undefined) {
+    return c.json({ message: "At least one of toolLife, pmStrokes, or spm is required" }, 400);
   }
 
   try {
-    const entry = await updateEntry(id, body);
+    const entry = await updateEntry(toolId, body);
     return c.json(entry);
   } catch (err: any) {
     return c.json({ message: err.message }, 404);
   }
 });
 
-// POST /:id/confirm — confirm maintenance done
-pm.post("/:id/confirm", async (c) => {
-  const { id } = c.req.param();
+// GET /:toolId/stroke-info — get current stroke and suggested next PM stroke
+pm.get("/:toolId/stroke-info", async (c) => {
+  const toolId = Number(c.req.param("toolId"));
+  try {
+    const info = await getStrokeInfo(toolId);
+    return c.json(info);
+  } catch (err: any) {
+    return c.json({ message: err.message }, 404);
+  }
+});
+
+// POST /:toolId/confirm — confirm maintenance done (supports multipart file upload)
+pm.post("/:toolId/confirm", async (c) => {
+  const toolId = Number(c.req.param("toolId"));
+  const contentType = c.req.header("content-type") || "";
+
+  let nextStroke: number | undefined;
+  let attachmentFileName: string | null = null;
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await c.req.formData();
+    const nextStrokeVal = formData.get("nextStroke");
+    nextStroke = nextStrokeVal ? Number(nextStrokeVal) : undefined;
+
+    const file = formData.get("attachment") as File | null;
+    if (file && file.size > 0) {
+      // Ensure attachments directory exists
+      const attachDir = env.PM_ATTACHMENTS_DIR;
+      if (!existsSync(attachDir)) {
+        mkdirSync(attachDir, { recursive: true });
+      }
+
+      // Look up tool number
+      const entries = await getEntries();
+      const toolEntry = entries.find((e) => e.toolId === toolId);
+      const toolNumber = toolEntry?.toolNo ?? String(toolId);
+
+      // Build filename: toolNumber_YYYY-MM-DD_HH-MM-SS + original extension
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 19).replace("T", "_").replace(/:/g, "-"); // YYYY-MM-DD_HH-MM-SS
+      const ext = extname(file.name) || "";
+      attachmentFileName = `${toolNumber}_${dateStr}${ext}`;
+
+      // Write file to disk
+      const filePath = join(attachDir, attachmentFileName);
+      const arrayBuffer = await file.arrayBuffer();
+      await Bun.write(filePath, arrayBuffer);
+    }
+  } else {
+    const body = await c.req.json<{ nextStroke: number }>();
+    nextStroke = body.nextStroke;
+  }
+
+  if (nextStroke === undefined) {
+    return c.json({ message: "nextStroke is required" }, 400);
+  }
 
   try {
-    const entry = await confirmMaintenance(id);
+    const entry = await confirmMaintenance(toolId, nextStroke, attachmentFileName ?? undefined);
     return c.json(entry);
   } catch (err: any) {
     return c.json({ message: err.message }, 404);
   }
 });
 
-// DELETE /:id — remove a PM entry
-pm.delete("/:id", async (c) => {
-  const { id } = c.req.param();
+// DELETE /:toolId — remove a tool_life entry and its maintenance records
+pm.delete("/:toolId", async (c) => {
+  const toolId = Number(c.req.param("toolId"));
 
   try {
-    await deleteEntry(id);
+    await deleteEntry(toolId);
     return c.json({ message: "Deleted" });
   } catch (err: any) {
     return c.json({ message: err.message }, 404);
   }
+});
+
+// GET /attachment/:filename — serve a saved PM attachment
+pm.get("/attachment/:filename", async (c) => {
+  const filename = c.req.param("filename");
+  const filePath = join(env.PM_ATTACHMENTS_DIR, filename);
+
+  if (!existsSync(filePath)) {
+    return c.json({ message: "Attachment not found" }, 404);
+  }
+
+  const file = Bun.file(filePath);
+  return new Response(file.stream(), {
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${filename}"`,
+    },
+  });
 });
 
 export default pm;

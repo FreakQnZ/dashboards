@@ -1,4 +1,6 @@
-export { default as DashboardPage } from "./DashboardPage";
 export { default as LandingPage } from "./LandingPage";
 export { default as ToolsDashboardPage } from "./ToolsDashboardPage";
 export { default as PreventiveMaintenancePage } from "./PreventiveMaintenancePage";
+export { default as LifeReportPage } from "./LifeReportPage";
+export { default as ProductionDashboardPage } from "./ProductionDashboardPage";
+export { default as RMVariancePage } from "./RMVariancePage";

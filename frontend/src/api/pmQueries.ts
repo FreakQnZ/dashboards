@@ -8,15 +8,25 @@ export interface ToolSearchResult {
   toolNo: string;
 }
 
+export interface AllToolsResult {
+  id: number;
+  toolNo: string;
+  partNo: string;
+}
+
 export interface MaintenanceRecord {
+  id: number;
   date: string;
+  currentStroke: number;
+  nextStroke: number;
+  attachment: string | null;
 }
 
 export interface PMEntry {
-  id: string;
   toolId: number;
   toolNo: string;
   toolLife: number;
+  spm: number;
   pmStrokes: number;
   maintenanceHistory: MaintenanceRecord[];
   createdAt: string;
@@ -35,6 +45,13 @@ export function useToolSearch(query: string) {
   });
 }
 
+export function useAllTools() {
+  return useQuery({
+    queryKey: ["tools", "all"],
+    queryFn: () => apiFetch<AllToolsResult[]>("/api/tools/all"),
+  });
+}
+
 export function usePMEntries() {
   return useQuery({
     queryKey: ["pm-entries"],
@@ -44,6 +61,15 @@ export function usePMEntries() {
 
 // ── Mutations ──────────────────────────────────────────────────────
 
+export function useToolStrokes(toolId: number | null) {
+  return useQuery({
+    queryKey: ["tool-strokes", toolId],
+    queryFn: () =>
+      apiFetch<{ totalStrokes: number }>(`/api/pm/tool-strokes/${toolId}`),
+    enabled: toolId !== null,
+  });
+}
+
 export function useAddPMEntry() {
   const qc = useQueryClient();
   return useMutation({
@@ -51,7 +77,9 @@ export function useAddPMEntry() {
       toolId: number;
       toolNo: string;
       toolLife: number;
+      spm: number;
       pmStrokes: number;
+      nextStroke: number;
     }) =>
       apiFetch<PMEntry>("/api/pm", {
         method: "POST",
@@ -66,12 +94,13 @@ export function useAddPMEntry() {
 export function useUpdatePMEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { entryId: string; toolLife?: number; pmStrokes?: number }) =>
-      apiFetch<PMEntry>(`/api/pm/${data.entryId}`, {
+    mutationFn: (data: { toolId: number; toolLife?: number; pmStrokes?: number; spm?: number }) =>
+      apiFetch<PMEntry>(`/api/pm/${data.toolId}`, {
         method: "PATCH",
         body: JSON.stringify({
           ...(data.toolLife !== undefined && { toolLife: data.toolLife }),
           ...(data.pmStrokes !== undefined && { pmStrokes: data.pmStrokes }),
+          ...(data.spm !== undefined && { spm: data.spm }),
         }),
       }),
     onSuccess: () => {
@@ -80,13 +109,53 @@ export function useUpdatePMEntry() {
   });
 }
 
+export interface StrokeInfo {
+  currentStroke: number;
+  suggestedNextStroke: number;
+}
+
+export interface ToolStrokesResult {
+  totalStrokes: number;
+}
+
+export function useStrokeInfo(toolId: number | null) {
+  return useQuery({
+    queryKey: ["stroke-info", toolId],
+    queryFn: () => apiFetch<StrokeInfo>(`/api/pm/${toolId}/stroke-info`),
+    enabled: toolId !== null,
+  });
+}
+
 export function useConfirmMaintenance() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (entryId: string) =>
-      apiFetch<PMEntry>(`/api/pm/${entryId}/confirm`, {
-        method: "POST",
-      }),
+    mutationFn: async (data: {
+      toolId: number;
+      nextStroke: number;
+      attachmentFile?: File;
+    }) => {
+      const formData = new FormData();
+      formData.append("nextStroke", String(data.nextStroke));
+      if (data.attachmentFile) {
+        formData.append("attachment", data.attachmentFile);
+      }
+
+      const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+      const res = await fetch(
+        `${API_BASE}/api/pm/${data.toolId}/confirm`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(error.message || `API error: ${res.status}`);
+      }
+
+      return res.json() as Promise<PMEntry>;
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-entries"] });
     },
@@ -96,8 +165,8 @@ export function useConfirmMaintenance() {
 export function useDeletePMEntry() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (entryId: string) =>
-      apiFetch<{ message: string }>(`/api/pm/${entryId}`, {
+    mutationFn: (toolId: number) =>
+      apiFetch<{ message: string }>(`/api/pm/${toolId}`, {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -109,14 +178,15 @@ export function useDeletePMEntry() {
 // ── PM Status (tools reaching ≥80% threshold) ─────────────────────
 
 export interface PMStatusEntry {
-  id: string;
   toolId: number;
   toolNo: string;
   toolLife: number;
+  spm: number;
   pmStrokes: number;
-  strokesSinceLastPM: number;
-  pmPercentage: number;
+  pmCurrentStroke: number;
+  nextStroke: number;
   totalLifetimeStrokes: number;
+  pmPercentage: number;
   lastMaintenanceDate: string | null;
   maintenanceCount: number;
 }

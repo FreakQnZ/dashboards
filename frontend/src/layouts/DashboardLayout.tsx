@@ -12,11 +12,11 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import BarChartIcon from "@mui/icons-material/BarChart";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import InventoryIcon from "@mui/icons-material/Inventory";
 import BuildIcon from "@mui/icons-material/Build";
 import HandymanIcon from "@mui/icons-material/Handyman";
+import AssessmentIcon from "@mui/icons-material/Assessment";
+import FactoryIcon from "@mui/icons-material/Factory";
+import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import Box from "@mui/material/Box";
 
 const DRAWER_WIDTH = 240;
@@ -25,10 +25,9 @@ const navItems = [
   { label: "Home", icon: <HomeIcon />, path: "/" },
   { label: "Tools", icon: <BuildIcon />, path: "/dashboards/tools" },
   { label: "Preventive Maintenance", icon: <HandymanIcon />, path: "/preventive-maintenance" },
-  { label: "Production", icon: <DashboardIcon />, path: "/dashboards/production" },
-  { label: "Quality", icon: <BarChartIcon />, path: "/dashboards/quality" },
-  { label: "Downtime", icon: <ShowChartIcon />, path: "/dashboards/downtime" },
-  { label: "Inventory", icon: <InventoryIcon />, path: "/dashboards/inventory" },
+  { label: "Life Report", icon: <AssessmentIcon />, path: "/life-report" },
+  { label: "Production", icon: <FactoryIcon />, path: "/production" },
+  { label: "RM Variance", icon: <CompareArrowsIcon />, path: "/rm-variance" },
 ];
 
 interface DashboardLayoutProps {
@@ -131,7 +130,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           display: "flex",
           flexDirection: "column",
           height: "100vh",
-          overflow: "hidden",
+          overflow: "auto",
           backgroundColor: "background.default",
         }}
       >

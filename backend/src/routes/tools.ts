@@ -112,8 +112,12 @@ async function getToolsForDate(
     tool.machineCount = new Set(tool.machines.map((m) => m.machineId)).size;
   }
 
+  const fallbackDate = baseDate
+    ? addDays(baseDate, offset)
+    : new Date().toISOString().slice(0, 10);
+
   return {
-    date: rows[0]?.date ?? (baseDate ? addDays(baseDate, offset) : null),
+    date: rows[0]?.date ?? fallbackDate,
     count: toolMap.size,
     tools: Array.from(toolMap.values()),
   };
@@ -128,6 +132,23 @@ tools.get("/count", async (c) => {
     .executeTakeFirst();
 
   return c.json({ total: Number(result?.total ?? 0) });
+});
+
+// GET /all - fetch all active tools with minimal info
+tools.get("/all", async (c) => {
+  const rows = await db
+    .selectFrom("components_tool")
+    .innerJoin("components as c", "c.CO_ID", "components_tool.CT_COMPID")
+    .select([
+      "components_tool.CT_ID as id",
+      "components_tool.CT_TOOLNO as toolNo",
+      "c.CO_PARTNO as partNo"
+    ])
+    .where("components_tool.CT_ACTIVEYN", "=", "Y")
+    .orderBy("components_tool.CT_TOOLNO", "asc")
+    .execute();
+
+  return c.json(rows);
 });
 
 // GET /search - search tools by tool number

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import LinearProgress from "@mui/material/LinearProgress";
@@ -14,16 +15,13 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import BuildIcon from "@mui/icons-material/Build";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import ErrorIcon from "@mui/icons-material/Error";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useToolsToday, useToolsForDate, usePMStatus, usePMStatusAll, useToolsCount } from "@/api";
 import type { ToolWithMachines, PMStatusEntry } from "@/api";
+import { formatIndianCompact as formatNumber } from "@/utils";
 
 // ── Helpers ────────────────────────────────────────────────────────
-
-function formatNumber(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
 
 function formatDate(d: string): string {
   return new Date(d + "T00:00:00").toLocaleDateString("en-IN", {
@@ -157,10 +155,10 @@ function MiniBar({
   return (
     <Box sx={{ flex: 1, minWidth: 0 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.15 }}>
-        <Typography variant="caption" sx={{ fontSize: 9, color: "text.secondary", lineHeight: 1 }}>
+        <Typography variant="caption" sx={{ fontSize: 9, color: "text.primary", fontWeight: 700, lineHeight: 1 }}>
           {label}
         </Typography>
-        <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 600, lineHeight: 1 }}>
+        <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, lineHeight: 1 }}>
           {formatNumber(value)}/{formatNumber(max)} ({pct}%)
         </Typography>
       </Box>
@@ -185,9 +183,10 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
       : 0
     : 0;
 
-  // Projected PM % after current scheduled production
-  const projectedPmPct = hasPM && pmEntry!.pmStrokes > 0
-    ? Math.round(((pmEntry!.strokesSinceLastPM + entry.scheduledQty) / pmEntry!.pmStrokes) * 100)
+  // Projected PM %: how far (totalStrokes + scheduledQty) is from pmCurrentStroke toward nextStroke
+  const pmRange = hasPM ? (pmEntry!.nextStroke - pmEntry!.pmCurrentStroke) : 0;
+  const projectedPmPct = hasPM && pmRange > 0
+    ? Math.round(((pmEntry!.totalLifetimeStrokes + entry.scheduledQty - pmEntry!.pmCurrentStroke) / pmRange) * 100)
     : 0;
 
   const willCross100 = hasPM && projectedPmPct >= 100;
@@ -226,7 +225,7 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
             flexShrink: 0,
           }}
         >
-          <Typography variant="caption" fontWeight={600} sx={{ fontSize: 10, lineHeight: 1 }}>
+          <Typography variant="caption" fontWeight={700} sx={{ fontSize: 10, lineHeight: 1 }}>
             {entry.machineName}
           </Typography>
         </Box>
@@ -243,11 +242,11 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
       {/* Row 2: Part name + part number (full width) */}
       <Typography
         variant="caption"
-        color="text.secondary"
+        fontWeight={700}
         sx={{ fontSize: 10, display: "block", lineHeight: 1.3, mb: 0.4 }}
       >
         {entry.partName}
-        <Typography component="span" variant="caption" color="text.disabled" sx={{ fontSize: 10, ml: 0.5 }}>
+        <Typography component="span" variant="caption" fontWeight={700} sx={{ fontSize: 10, ml: 0.5 }}>
           ({entry.partNo})
         </Typography>
       </Typography>
@@ -257,8 +256,8 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
         <Box sx={{ display: "flex", gap: 1.5 }}>
           <MiniBar
             label="PM"
-            value={pmEntry!.strokesSinceLastPM}
-            max={pmEntry!.pmStrokes}
+            value={pmEntry!.totalLifetimeStrokes - pmEntry!.pmCurrentStroke}
+            max={pmEntry!.nextStroke - pmEntry!.pmCurrentStroke}
             pct={pmPct}
             color={pmBarColor}
           />
@@ -273,12 +272,12 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
       ) : (
         <Box sx={{ display: "flex", gap: 1.5 }}>
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography variant="caption" sx={{ fontSize: 9, color: "text.disabled" }}>PM</Typography>
-            <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>∞</Typography>
+            <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700 }}>PM</Typography>
+            <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700 }}>∞</Typography>
           </Box>
           <Box sx={{ flex: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography variant="caption" sx={{ fontSize: 9, color: "text.disabled" }}>Life</Typography>
-            <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>∞</Typography>
+            <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700 }}>Life</Typography>
+            <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700 }}>∞</Typography>
           </Box>
         </Box>
       )}
@@ -330,14 +329,14 @@ function MaintenanceCard({ entry }: { entry: PMStatusEntry }) {
         />
       </Box>
 
-      {/* PM Strokes progress */}
+      {/* PM Progress (relative from last maintenance to next) */}
       <Box sx={{ mt: 1.5 }}>
         <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
           <Typography variant="caption" color="text.secondary">
-            PM Strokes
+            Next PM
           </Typography>
           <Typography variant="caption" fontWeight={600}>
-            {formatNumber(entry.strokesSinceLastPM)} / {formatNumber(entry.pmStrokes)} ({entry.pmPercentage}%)
+            {formatNumber(entry.totalLifetimeStrokes - entry.pmCurrentStroke)} / {formatNumber(entry.nextStroke - entry.pmCurrentStroke)} ({entry.pmPercentage}%)
           </Typography>
         </Box>
         <Box sx={{ height: 6, borderRadius: 3, bgcolor: "grey.200", overflow: "hidden" }}>
@@ -388,13 +387,16 @@ function MaintenanceCard({ entry }: { entry: PMStatusEntry }) {
 function AutoScrollColumn({
   children,
   itemCount,
+  reverse = false,
 }: {
   children: React.ReactNode;
   itemCount: number;
+  reverse?: boolean;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [needsScroll, setNeedsScroll] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
   const [contentHeight, setContentHeight] = useState(0);
   const [duration, setDuration] = useState(20);
 
@@ -416,16 +418,55 @@ function AutoScrollColumn({
     return () => window.removeEventListener("resize", measure);
   }, [measure, itemCount]);
 
-  const scrollUp = needsScroll
-    ? keyframes`
-        0%   { transform: translateY(0); }
-        100% { transform: translateY(-${contentHeight}px); }
-      `
+  // When switching to hover (manual scroll) mode, sync scroll position
+  const handleMouseEnter = useCallback(() => {
+    setIsHovered(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsHovered(false);
+  }, []);
+
+  const scrollAnim = needsScroll && !isHovered
+    ? reverse
+      ? keyframes`
+          0%   { transform: translateY(-${contentHeight}px); }
+          100% { transform: translateY(0); }
+        `
+      : keyframes`
+          0%   { transform: translateY(0); }
+          100% { transform: translateY(-${contentHeight}px); }
+        `
     : undefined;
+
+  // When hovered, show as a normal scrollable list
+  if (isHovered && needsScroll) {
+    return (
+      <Box
+        ref={outerRef}
+        onMouseLeave={handleMouseLeave}
+        sx={{
+          flex: 1,
+          overflowY: "auto",
+          p: 1.5,
+          position: "relative",
+          "&::-webkit-scrollbar": { width: 6 },
+          "&::-webkit-scrollbar-thumb": {
+            bgcolor: "rgba(0,0,0,0.2)",
+            borderRadius: 3,
+          },
+          "&::-webkit-scrollbar-track": { bgcolor: "transparent" },
+        }}
+      >
+        <Box ref={innerRef}>{children}</Box>
+      </Box>
+    );
+  }
 
   return (
     <Box
       ref={outerRef}
+      onMouseEnter={handleMouseEnter}
       sx={{
         flex: 1,
         overflow: "hidden",
@@ -438,9 +479,6 @@ function AutoScrollColumn({
           WebkitMaskImage:
             "linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%)",
         }),
-        "&:hover .scroll-track": {
-          animationPlayState: "paused",
-        },
       }}
     >
       {needsScroll ? (
@@ -449,7 +487,7 @@ function AutoScrollColumn({
           sx={{
             display: "flex",
             flexDirection: "column",
-            animation: `${scrollUp} ${duration}s linear infinite`,
+            animation: `${scrollAnim} ${duration}s linear infinite`,
           }}
         >
           {/* Original */}
@@ -477,6 +515,10 @@ export default function ToolsDashboardPage() {
   const { data: pmStatus = [], isLoading: pmLoading } = usePMStatus();
   const { data: pmAll = [], isLoading: pmAllLoading } = usePMStatusAll();
   const { data: toolsCountData, isLoading: toolsCountLoading } = useToolsCount();
+  const navigate = useNavigate();
+
+  const [todayReverse, setTodayReverse] = useState(false);
+  const [futureReverse, setFutureReverse] = useState(false);
 
   const isLoading = todayLoading || futureLoading || pmLoading || pmAllLoading || toolsCountLoading;
 
@@ -487,19 +529,23 @@ export default function ToolsDashboardPage() {
     return map;
   }, [pmAll]);
 
-  // Compute PM bands
+  // Compute life-span bands
   const totalTools = toolsCountData?.total ?? 0;
-  const warningTools = pmAll.filter(
-    (t) => t.pmPercentage >= 50 && t.pmPercentage < 80
-  ).length;
-  const criticalTools = pmAll.filter((t) => t.pmPercentage >= 80).length;
+  const warningTools = pmAll.filter((t) => {
+    const lifePct = t.toolLife > 0 ? (t.totalLifetimeStrokes / t.toolLife) * 100 : 0;
+    return lifePct >= 50 && lifePct < 80;
+  }).length;
+  const criticalTools = pmAll.filter((t) => {
+    const lifePct = t.toolLife > 0 ? (t.totalLifetimeStrokes / t.toolLife) * 100 : 0;
+    return lifePct >= 80;
+  }).length;
 
   return (
     <Box
       sx={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        height: "100vh",
         overflow: "hidden",
         p: 3,
       }}
@@ -519,7 +565,9 @@ export default function ToolsDashboardPage() {
             Tool Management Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {todayData?.date ? formatDate(todayData.date) : "Loading..."}
+            {todayData?.date
+              ? formatDate(todayData.date)
+              : formatDate(new Date().toISOString().slice(0, 10))}
           </Typography>
         </Box>
 
@@ -554,6 +602,7 @@ export default function ToolsDashboardPage() {
 
           {/* 50-80% warning band */}
           <Box
+            onClick={() => navigate("/life-report?filter=warning")}
             sx={{
               flex: 1,
               display: "flex",
@@ -564,6 +613,9 @@ export default function ToolsDashboardPage() {
               px: 2.5,
               py: 1.5,
               border: "1px solid #f9a825",
+              cursor: "pointer",
+              transition: "box-shadow 0.2s",
+              "&:hover": { boxShadow: "0 2px 8px rgba(249,168,37,0.3)" },
             }}
           >
             <ReportProblemIcon sx={{ fontSize: 22, color: "#f9a825" }} />
@@ -572,7 +624,7 @@ export default function ToolsDashboardPage() {
                 variant="caption"
                 sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
               >
-                PM 50–80%
+                Life 50–80%
               </Typography>
               <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#f9a825">
                 {warningTools}
@@ -582,6 +634,7 @@ export default function ToolsDashboardPage() {
 
           {/* ≥80% critical band */}
           <Box
+            onClick={() => navigate("/life-report?filter=critical")}
             sx={{
               flex: 1,
               display: "flex",
@@ -592,6 +645,9 @@ export default function ToolsDashboardPage() {
               px: 2.5,
               py: 1.5,
               border: "1px solid #d32f2f",
+              cursor: "pointer",
+              transition: "box-shadow 0.2s",
+              "&:hover": { boxShadow: "0 2px 8px rgba(211,47,47,0.3)" },
             }}
           >
             <ErrorIcon sx={{ fontSize: 22, color: "#d32f2f" }} />
@@ -600,7 +656,7 @@ export default function ToolsDashboardPage() {
                 variant="caption"
                 sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
               >
-                PM ≥80% (Alert)
+                Life ≥80% (Alert)
               </Typography>
               <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#d32f2f">
                 {criticalTools}
@@ -669,6 +725,9 @@ export default function ToolsDashboardPage() {
               py: 1.5,
               bgcolor: "#1565c0",
               flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
             <Typography
@@ -679,8 +738,16 @@ export default function ToolsDashboardPage() {
             >
               Today
             </Typography>
+            <IconButton
+              size="small"
+              onClick={() => setTodayReverse((r) => !r)}
+              sx={{ color: "#fff", p: 0.5 }}
+              title={todayReverse ? "Scroll down" : "Scroll up"}
+            >
+              {todayReverse ? <ArrowDownwardIcon sx={{ fontSize: 18 }} /> : <ArrowUpwardIcon sx={{ fontSize: 18 }} />}
+            </IconButton>
           </Box>
-          <AutoScrollColumn itemCount={todayData?.tools ? flattenTools(todayData.tools).length : 0}>
+          <AutoScrollColumn reverse={todayReverse} itemCount={todayData?.tools ? flattenTools(todayData.tools).length : 0}>
             {!todayData?.tools?.length && !isLoading && (
               <Typography
                 variant="body2"
@@ -749,8 +816,16 @@ export default function ToolsDashboardPage() {
             >
               <ArrowForwardIosIcon sx={{ fontSize: 16 }} />
             </IconButton>
+            <IconButton
+              size="small"
+              onClick={() => setFutureReverse((r) => !r)}
+              sx={{ color: "#fff", p: 0.5, ml: 0.5 }}
+              title={futureReverse ? "Scroll down" : "Scroll up"}
+            >
+              {futureReverse ? <ArrowDownwardIcon sx={{ fontSize: 18 }} /> : <ArrowUpwardIcon sx={{ fontSize: 18 }} />}
+            </IconButton>
           </Box>
-          <AutoScrollColumn itemCount={futureData?.tools ? flattenTools(futureData.tools).length : 0}>
+          <AutoScrollColumn reverse={futureReverse} itemCount={futureData?.tools ? flattenTools(futureData.tools).length : 0}>
             {!futureData?.tools?.length && !isLoading && (
               <Typography
                 variant="body2"
@@ -807,7 +882,7 @@ export default function ToolsDashboardPage() {
               </Typography>
             )}
             {pmStatus.map((entry) => (
-              <MaintenanceCard key={entry.id} entry={entry} />
+              <MaintenanceCard key={entry.toolId} entry={entry} />
             ))}
           </AutoScrollColumn>
         </Box>
