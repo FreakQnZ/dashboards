@@ -393,16 +393,14 @@ export default function ReportsPage() {
               {reports.map((report) => (
                 <Paper key={report.id} variant="outlined" sx={{ p: 1.25 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, minWidth: 0 }}>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                    <Box sx={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700}>
                         <DescriptionIcon sx={{ fontSize: 18, mr: 1, verticalAlign: "text-bottom" }} />
                         {report.name}
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-                        {report.variables.length > 0
-                          ? <Chip size="small" label={`${report.variables.length} inputs`} />
-                          : <Chip size="small" label="No inputs" />}
-                      </Box>
+                      {report.variables.length > 0
+                        ? <Chip size="small" label={`${report.variables.length} inputs`} />
+                        : <Chip size="small" label="No inputs" />}
                     </Box>
 
                     <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} sx={{ flexShrink: 0 }}>
