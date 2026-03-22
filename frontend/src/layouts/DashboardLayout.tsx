@@ -17,6 +17,7 @@ import HandymanIcon from "@mui/icons-material/Handyman";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactoryIcon from "@mui/icons-material/Factory";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import Box from "@mui/material/Box";
 
 const DRAWER_WIDTH = 240;
@@ -28,6 +29,7 @@ const navItems = [
   { label: "Life Report", icon: <AssessmentIcon />, path: "/life-report" },
   { label: "Production", icon: <FactoryIcon />, path: "/production" },
   { label: "RM Variance", icon: <CompareArrowsIcon />, path: "/rm-variance" },
+  { label: "Reports", icon: <QueryStatsIcon />, path: "/reports" },
 ];
 
 interface DashboardLayoutProps {

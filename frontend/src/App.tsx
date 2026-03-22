@@ -11,6 +11,8 @@ import {
   LifeReportPage,
   ProductionDashboardPage,
   RMVariancePage,
+  ReportsPage,
+  RunReportPage,
 } from "./pages";
 
 const queryClient = new QueryClient({
@@ -67,6 +69,22 @@ export default function App() {
               element={
                 <DashboardLayout>
                   <RMVariancePage />
+                </DashboardLayout>
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <DashboardLayout>
+                  <ReportsPage />
+                </DashboardLayout>
+              }
+            />
+            <Route
+              path="/reports/run"
+              element={
+                <DashboardLayout>
+                  <RunReportPage />
                 </DashboardLayout>
               }
             />

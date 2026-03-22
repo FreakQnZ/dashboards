@@ -46,3 +46,16 @@ export type {
   RMVarianceTotals,
   RMVarianceResponse,
 } from "./rmVarianceQueries";
+export {
+  useReportGroups,
+  useReports,
+  useReportById,
+  useCreateGroup,
+  useCreateReport,
+  useUpdateReport,
+  useDeleteGroup,
+  useDeleteReport,
+  useRunReport,
+  useExportReport,
+} from "./reportsQueries";
+export type { ReportGroup, ReportDefinition, ReportRunResult } from "./reportsQueries";

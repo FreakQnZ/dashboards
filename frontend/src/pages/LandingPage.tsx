@@ -10,6 +10,7 @@ import HandymanIcon from "@mui/icons-material/Handyman";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactoryIcon from "@mui/icons-material/Factory";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import QueryStatsIcon from "@mui/icons-material/QueryStats";
 
 const dashboards = [
   {
@@ -46,6 +47,13 @@ const dashboards = [
     path: "/rm-variance",
     icon: <CompareArrowsIcon sx={{ fontSize: 48 }} />,
     color: "#e65100",
+  },
+  {
+    title: "Reports",
+    description: "Save SQL queries, run reports and review tabular outputs in one place",
+    path: "/reports",
+    icon: <QueryStatsIcon sx={{ fontSize: 48 }} />,
+    color: "#455a64",
   },
 ];
 

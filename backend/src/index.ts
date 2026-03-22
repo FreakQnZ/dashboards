@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import { corsMiddleware, logger } from "./middleware";
-import { healthRoutes, toolsRoutes, pmRoutes, scheduleRoutes, productionRoutes, rmVarianceRoutes } from "./routes";
+import { healthRoutes, toolsRoutes, pmRoutes, scheduleRoutes, productionRoutes, rmVarianceRoutes, reportsRoutes } from "./routes";
 import { env } from "./env";
 import { join } from "path";
 
@@ -18,6 +18,7 @@ app.route("/api/pm", pmRoutes);
 app.route("/schedule", scheduleRoutes);
 app.route("/api/production", productionRoutes);
 app.route("/api/rm-variance", rmVarianceRoutes);
+app.route("/api/reports", reportsRoutes);
 
 // ================= FRONTEND STATIC =================
 
