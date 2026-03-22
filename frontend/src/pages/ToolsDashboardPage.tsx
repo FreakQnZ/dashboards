@@ -15,6 +15,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import BuildIcon from "@mui/icons-material/Build";
 import ReportProblemIcon from "@mui/icons-material/ReportProblem";
 import ErrorIcon from "@mui/icons-material/Error";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useToolsToday, useToolsForDate, usePMStatus, usePMStatusAll, useToolsCount } from "@/api";
@@ -596,6 +597,38 @@ export default function ToolsDashboardPage() {
               </Typography>
               <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
                 {totalTools}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* All Life */}
+          <Box
+            onClick={() => navigate("/life-report")}
+            sx={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              bgcolor: "#e0f2f1",
+              borderRadius: 2,
+              px: 2.5,
+              py: 1.5,
+              border: "1px solid #00897b",
+              cursor: "pointer",
+              transition: "box-shadow 0.2s",
+              "&:hover": { boxShadow: "0 2px 8px rgba(0,137,123,0.3)" },
+            }}
+          >
+            <CheckCircleIcon sx={{ fontSize: 22, color: "#00897b" }} />
+            <Box>
+              <Typography
+                variant="caption"
+                sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
+              >
+                All Life
+              </Typography>
+              <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#00897b">
+                {pmAll.length}
               </Typography>
             </Box>
           </Box>

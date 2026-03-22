@@ -251,7 +251,7 @@ export default function ReportsPage() {
 
   const openReportRunTab = (reportId: string) => {
     const url = `/reports/run?reportId=${encodeURIComponent(reportId)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.location.assign(url);
   };
 
   const handleEditReport = (payload: { name: string; queryTemplate: string }) => {

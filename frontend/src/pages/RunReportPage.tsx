@@ -157,7 +157,7 @@ export default function RunReportPage() {
                   {report.name}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  As on {new Date(reportAsOf).toLocaleString("en-IN")}
+                  Records: {runResult ? runResult.rowCount : "-"} | As on {new Date(reportAsOf).toLocaleString("en-IN")}
                 </Typography>
               </Box>
 
@@ -216,11 +216,6 @@ export default function RunReportPage() {
           <Paper variant="outlined" sx={{ flex: 1, minHeight: 240, overflow: "hidden" }}>
             {runResult ? (
               <>
-                <Box sx={{ px: 2, py: 1, borderBottom: "1px solid", borderColor: "divider" }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Records: {runResult.rowCount} | Last Updated: {new Date(runResult.executedAt).toLocaleString("en-IN")}
-                  </Typography>
-                </Box>
                 <TableContainer sx={{ maxHeight: "100%" }}>
                   <Table stickyHeader size="small">
                     <TableHead>
