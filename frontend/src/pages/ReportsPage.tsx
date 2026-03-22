@@ -114,7 +114,7 @@ function CreateReportDialog({
   }, [open, initialName, initialQueryTemplate]);
 
   const detectedVariables = useMemo(() => {
-    const re = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+    const re = /\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}/g;
     const found = new Set<string>();
     let match: RegExpExecArray | null = null;
 
@@ -391,22 +391,23 @@ export default function ReportsPage() {
           {selectedGroup ? (
             <Stack spacing={1.5} sx={{ minHeight: 0, height: "100%", overflowY: "auto", pr: 0.5 }}>
               {reports.map((report) => (
-                <Paper key={report.id} variant="outlined" sx={{ p: 2 }}>
+                <Paper key={report.id} variant="outlined" sx={{ p: 1.25 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, minWidth: 0 }}>
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 0.75 }}>
+                      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
                         <DescriptionIcon sx={{ fontSize: 18, mr: 1, verticalAlign: "text-bottom" }} />
                         {report.name}
                       </Typography>
                       <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                         {report.variables.length > 0
-                          ? <Chip size="small" label={`${report.variables.length} input fields`} />
-                          : <Chip size="small" label="No inputs required" />}
+                          ? <Chip size="small" label={`${report.variables.length} inputs`} />
+                          : <Chip size="small" label="No inputs" />}
                       </Box>
                     </Box>
 
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexShrink: 0 }}>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} sx={{ flexShrink: 0 }}>
                       <Button
+                        size="small"
                         variant="outlined"
                         startIcon={<EditIcon />}
                         onClick={() =>
@@ -420,6 +421,7 @@ export default function ReportsPage() {
                         Edit
                       </Button>
                       <Button
+                        size="small"
                         variant="contained"
                         startIcon={<OpenInNewIcon />}
                         onClick={() => openReportRunTab(report.id)}
@@ -427,6 +429,7 @@ export default function ReportsPage() {
                         Open
                       </Button>
                       <Button
+                        size="small"
                         variant="outlined"
                         color="error"
                         startIcon={<DeleteIcon />}

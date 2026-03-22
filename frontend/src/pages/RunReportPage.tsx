@@ -34,6 +34,7 @@ export default function RunReportPage() {
     rowCount: number;
     executedAt: string;
   } | null>(null);
+  const [reportAsOf, setReportAsOf] = useState<string>(() => new Date().toISOString());
   const autoRunRef = useRef<string | null>(null);
 
   const { data: report, isLoading } = useReportById(reportId);
@@ -75,6 +76,7 @@ export default function RunReportPage() {
       {
         onSuccess: (result) => {
           setRunResult(result);
+          setReportAsOf(new Date().toISOString());
           setError(null);
         },
         onError: (err) => setError(err.message),
@@ -94,6 +96,7 @@ export default function RunReportPage() {
           return acc;
         }, {}),
         fileName: `${report.name}.xlsx`,
+        asOf: reportAsOf,
       },
       {
         onError: (err) => setError(err.message),
@@ -118,6 +121,7 @@ export default function RunReportPage() {
       {
         onSuccess: (result) => {
           setRunResult(result);
+          setReportAsOf(new Date().toISOString());
           setError(null);
         },
         onError: (err) => setError(err.message),
@@ -125,7 +129,7 @@ export default function RunReportPage() {
     );
   }, [report, runReport]);
 
-  const runLabel = runResult ? "Update" : "Run";
+  const runLabel = runResult ? "Refresh" : "Run";
   const runIcon = runResult ? <RefreshIcon /> : <PlayArrowIcon />;
 
   if (!reportId) {
@@ -138,15 +142,6 @@ export default function RunReportPage() {
 
   return (
     <Box sx={{ px: 3, py: 3, height: "100%", display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          {report?.name ?? "Run Report"}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Update input values and rerun to refresh results.
-        </Typography>
-      </Box>
-
       {error && <Alert severity="error">{error}</Alert>}
 
       {isLoading || !report ? (
@@ -156,52 +151,63 @@ export default function RunReportPage() {
       ) : (
         <Stack spacing={2} sx={{ minHeight: 0, flex: 1 }}>
           <Paper variant="outlined" sx={{ p: 2 }}>
-            <Stack direction={{ xs: "column", lg: "row" }} spacing={2} alignItems={{ xs: "stretch", lg: "flex-end" }}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexWrap: "wrap", flex: 1 }}>
-                {report.variables.map((variableName) => (
-                  <TextField
-                    key={variableName}
-                    label={`{${variableName}}`}
-                    value={variableValues[variableName] ?? ""}
-                    onChange={(e) =>
-                      setVariableValues((prev) => ({
-                        ...prev,
-                        [variableName]: e.target.value,
-                      }))
-                    }
-                    size="small"
-                    sx={{ minWidth: 180 }}
-                  />
-                ))}
-                {report.variables.length === 0 && (
-                  <Chip size="small" label="No inputs required" />
-                )}
-              </Stack>
+            <Stack direction={{ xs: "column", lg: "row" }} spacing={2} alignItems={{ xs: "stretch", lg: "flex-start" }}>
+              <Box sx={{ minWidth: 0, width: { xs: "100%", lg: 300 }, flexShrink: 0 }}>
+                <Typography variant="h5" fontWeight={700} noWrap>
+                  {report.name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  As on {new Date(reportAsOf).toLocaleString("en-IN")}
+                </Typography>
+              </Box>
 
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="contained"
-                  startIcon={runReport.isPending ? <CircularProgress size={16} color="inherit" /> : runIcon}
-                  onClick={handleRun}
-                  disabled={runReport.isPending || (report.variables.length > 0 && !requiredVarsFilled)}
-                >
-                  {runLabel}
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={
-                    exportReport.isPending ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />
-                  }
-                  onClick={handleExport}
-                  disabled={
-                    exportReport.isPending ||
-                    runReport.isPending ||
-                    (report.variables.length > 0 && !requiredVarsFilled)
-                  }
-                >
-                  Export Excel
-                </Button>
-              </Stack>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ xs: "stretch", md: "flex-start" }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ flexWrap: "wrap", flex: 1, minWidth: 0 }}>
+                    {report.variables.map((variableName) => (
+                      <TextField
+                        key={variableName}
+                        label={variableName}
+                        value={variableValues[variableName] ?? ""}
+                        onChange={(e) =>
+                          setVariableValues((prev) => ({
+                            ...prev,
+                            [variableName]: e.target.value,
+                          }))
+                        }
+                        size="small"
+                        sx={{ minWidth: 160 }}
+                      />
+                    ))}
+                    {report.variables.length === 0 && <Box sx={{ flex: 1 }} />}
+                  </Stack>
+
+                  <Stack direction="row" spacing={1} sx={{ flexShrink: 0, alignSelf: { xs: "stretch", md: "auto" } }}>
+                  <Button
+                    variant="contained"
+                    startIcon={runReport.isPending ? <CircularProgress size={16} color="inherit" /> : runIcon}
+                    onClick={handleRun}
+                    disabled={runReport.isPending || (report.variables.length > 0 && !requiredVarsFilled)}
+                  >
+                    {runLabel}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={
+                      exportReport.isPending ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />
+                    }
+                    onClick={handleExport}
+                    disabled={
+                      exportReport.isPending ||
+                      runReport.isPending ||
+                      (report.variables.length > 0 && !requiredVarsFilled)
+                    }
+                  >
+                    Export Excel
+                  </Button>
+                </Stack>
+                </Stack>
+              </Box>
             </Stack>
           </Paper>
 

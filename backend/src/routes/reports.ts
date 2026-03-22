@@ -188,9 +188,10 @@ reports.post("/reports/:reportId/run", async (c) => {
 reports.post("/reports/:reportId/export", async (c) => {
   const reportId = c.req.param("reportId");
   const body = (await c.req
-    .json<{ variables?: Record<string, string> }>()
+    .json<{ variables?: Record<string, string>; asOf?: string }>()
     .catch(() => ({ variables: {} as Record<string, string> }))) as {
     variables?: Record<string, string>;
+    asOf?: string;
   };
 
   try {
@@ -198,23 +199,34 @@ reports.post("/reports/:reportId/export", async (c) => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet((result.report.name || "Report").slice(0, 31));
 
-    worksheet.columns = result.columns.map((col) => ({
+    const exportColumns = result.columns.length > 0 ? result.columns : ["Result"];
+
+    worksheet.columns = exportColumns.map((col) => ({
       header: col,
       key: col,
       width: Math.min(Math.max(col.length + 4, 16), 48),
     }));
 
     for (const row of result.rows) {
-      const rowObject = result.columns.reduce<Record<string, unknown>>((acc, col) => {
+      const rowObject = exportColumns.reduce<Record<string, unknown>>((acc, col) => {
         acc[col] = row?.[col] ?? null;
         return acc;
       }, {});
       worksheet.addRow(rowObject);
     }
 
-    if (worksheet.getRow(1)) {
-      worksheet.getRow(1).font = { bold: true };
-    }
+    const asOfDate = body.asOf ? new Date(body.asOf) : new Date();
+    const validAsOf = Number.isNaN(asOfDate.getTime()) ? new Date() : asOfDate;
+    const headingText = `${result.report.name} as on ${validAsOf.toLocaleString("en-IN")}`;
+
+    worksheet.insertRow(1, [headingText]);
+    worksheet.insertRow(2, []);
+    worksheet.mergeCells(1, 1, 1, Math.max(exportColumns.length, 1));
+
+    const headingCell = worksheet.getCell(1, 1);
+    headingCell.font = { bold: true, size: 13 };
+
+    worksheet.getRow(3).font = { bold: true };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const fileName = `${safeExcelFilename(result.report.name)}.xlsx`;

@@ -158,6 +158,7 @@ export function useExportReport() {
       reportId: string;
       variables?: Record<string, string>;
       fileName?: string;
+      asOf?: string;
     }) => {
       const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
       const res = await fetch(`${API_BASE}/api/reports/reports/${payload.reportId}/export`, {
@@ -165,7 +166,7 @@ export function useExportReport() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ variables: payload.variables ?? {} }),
+        body: JSON.stringify({ variables: payload.variables ?? {}, asOf: payload.asOf }),
       });
 
       if (!res.ok) {

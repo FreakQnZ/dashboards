@@ -71,7 +71,7 @@ async function writeStore(data: ReportsStoreData): Promise<void> {
 }
 
 function extractVariables(queryTemplate: string): string[] {
-  const re = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+  const re = /\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}/g;
   const found = new Set<string>();
   let match: RegExpExecArray | null = null;
 
@@ -95,7 +95,7 @@ export function compileReportQuery(input: CompileReportInput): CompiledReportQue
 
   const provided = input.providedVariables ?? {};
   const params: Array<string | number | boolean | null> = [];
-  const variablePattern = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+  const variablePattern = /\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}/g;
 
   const sql = queryTemplate.replace(variablePattern, (_, variableName: string) => {
     if (!(variableName in provided)) {
