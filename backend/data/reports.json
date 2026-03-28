@@ -17,6 +17,12 @@
       "name": "Monthly Order",
       "createdAt": "2026-03-22T09:16:29.183Z",
       "updatedAt": "2026-03-22T09:16:29.183Z"
+    },
+    {
+      "id": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
+      "name": "Production",
+      "createdAt": "2026-03-23T11:09:27.642Z",
+      "updatedAt": "2026-03-23T11:09:27.642Z"
     }
   ],
   "reports": [
@@ -136,6 +142,60 @@
       ],
       "createdAt": "2026-03-22T09:17:27.716Z",
       "updatedAt": "2026-03-22T13:12:36.622Z"
+    },
+    {
+      "id": "c2bafa9d-9dfe-41df-8ac2-ebd37ddc1917",
+      "groupId": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
+      "name": "Monthly Production",
+      "queryTemplate": "select date(pd_date) 'Prod Date', CO_PARTNO 'Part No',MCM_Name Machine, CT_TOOLNO Tool, MM_RawMtPartNo 'Raw MAterial',\npd_batchno 'BAtch No', pd_prodqty  'No Of Comp', PD_SFREJECT 'SF Rej',PD_SWQTY 'SU Wastage',PD_SCRAPQTY 'Scrap',PD_QTYKG 'RawMaterial(Kg)', pd_prodqty/conVal 'Theo RM Kg'\nfrom production_details \nleft join machinemaster on MCM_Id= PD_MCID\nleft join materialmaster on mm_id = pd_rmid\nleft join components_tool on ct_id =pd_toolid\nleft join scheduled_production on pd_psid= ps_id\nleft join components on PS_PARENTCOMPID = CO_ID\nleft join (\nSELECT CT_ID AS ctid,\n        ((1 / ((MT_Density * MM_Thickness) * MM_StripWidth)) * ((1000 * CT_NO_OF_CAVITY) / CT_Pitch)) AS conVal\n      FROM components_tool\n      INNER JOIN materialmaster ON CT_RMID = MM_Id\n      INNER JOIN materialtypemaster ON MM_MTID = MT_Id\n      WHERE CT_ActiveYN = 'Y' AND CT_PITCH > 0 AND CT_NO_OF_CAVITY > 0) toolConv on ctid = ct_id \nwhere month(pd_date)= {month} and year(pd_date) = {year}\norder by pd_date",
+      "variables": [
+        "month",
+        "year"
+      ],
+      "createdAt": "2026-03-23T11:09:55.340Z",
+      "updatedAt": "2026-03-23T11:09:55.340Z"
+    },
+    {
+      "id": "b300ec06-7fda-4b71-bb9a-71c1383b9e2a",
+      "groupId": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
+      "name": "Monthly - Component Production",
+      "queryTemplate": "select  CO_PARTNO 'Part No', MM_RawMtPartNo 'Raw MAterial',\n sum(pd_prodqty)  'No Of Comp', sum(PD_SFREJECT) 'SF Rej',sum(PD_SWQTY) 'SU Wastage',round(sum(PD_SCRAPQTY),2) 'Scrap',round(sum(PD_QTYKG),2) 'RawMaterial(Kg)', round(sum(pd_prodqty/conVal),2) 'Theo RM Kg'\nfrom production_details \nleft join materialmaster on mm_id = pd_rmid\nleft join scheduled_production on pd_psid= ps_id\nleft join components on PS_PARENTCOMPID = CO_ID\nleft join components_tool on PD_TOOLID = ct_id\nleft join (\nSELECT CT_ID AS ctid,\n        ((1 / ((MT_Density * MM_Thickness) * MM_StripWidth)) * ((1000 * CT_NO_OF_CAVITY) / CT_Pitch)) AS conVal\n      FROM components_tool\n      INNER JOIN materialmaster ON CT_RMID = MM_Id\n      INNER JOIN materialtypemaster ON MM_MTID = MT_Id\n      WHERE CT_ActiveYN = 'Y' AND CT_PITCH > 0 AND CT_NO_OF_CAVITY > 0) toolConv on ctid = ct_id \nwhere month(pd_date)= {month} and year(pd_date) = {year}\ngroup by CO_PARTNO,MM_RawMtPartNo\norder by  CO_PARTNO;",
+      "variables": [
+        "month",
+        "year"
+      ],
+      "createdAt": "2026-03-23T11:28:49.238Z",
+      "updatedAt": "2026-03-23T11:28:49.238Z"
+    },
+    {
+      "id": "67ddf9fc-4292-4c99-be02-8585171f241b",
+      "groupId": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
+      "name": "Schedule Vs Produced - Monthly",
+      "queryTemplate": "select CO_PARTNO 'PartNo', CO_PARTNAME 'Part Name',sum(PS_QTY) 'Scheduled Qty', sum(PD_PRODQTY) 'Produced Qty'\nfrom scheduled_production\nleft join components on PS_PARENTCOMPID= co_id\n, production_details,schedule_master\nwhere ps_id= PD_PSID\nand PS_SMID = sm_id\nand SM_MONTH= {month}\nand SM_YEAR= {year}\ngroup by co_partno,CO_PARTNAME\norder by co_partno;",
+      "variables": [
+        "month",
+        "year"
+      ],
+      "createdAt": "2026-03-24T02:32:14.428Z",
+      "updatedAt": "2026-03-24T02:32:14.428Z"
+    },
+    {
+      "id": "819ce9dd-3716-43b6-8bef-6362456be940",
+      "groupId": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
+      "name": "Component STock",
+      "queryTemplate": "Select * from Component",
+      "variables": [],
+      "createdAt": "2026-03-24T06:38:20.979Z",
+      "updatedAt": "2026-03-24T06:38:20.979Z"
+    },
+    {
+      "id": "ed95ec7b-1c11-4e58-8adb-524421ea224c",
+      "groupId": "7c1483f0-5d23-4243-83cd-595edb469808",
+      "name": "Distinct Tools with PartNos",
+      "queryTemplate": "SELECT \n    ct_toolno AS Tool,\n    COUNT(*) AS 'Component Count',\n        COALESCE(MAX(CASE WHEN rn = 1 THEN CO_PARTNO END), '') AS Component1,\n\t\tCOALESCE(MAX(CASE WHEN rn = 2 THEN CO_PARTNO END), '') AS Component2,\n\t\tCOALESCE(MAX(CASE WHEN rn = 3 THEN CO_PARTNO END), '') AS Component3,\n        COALESCE(MAX(CASE WHEN rn = 4 THEN CO_PARTNO END), '') AS Component4\nFROM (\n    SELECT \n        ct_toolno,\n        CO_PARTNO,\n        ROW_NUMBER() OVER (PARTITION BY ct_toolno ORDER BY CO_PARTNO) AS rn\n    FROM components_tool \n    LEFT JOIN components ON CT_COMPID = CO_ID\n    WHERE ct_activeyn = 'Y'\n) t\nGROUP BY ct_toolno\nORDER BY ct_toolno;",
+      "variables": [],
+      "createdAt": "2026-03-25T12:13:51.363Z",
+      "updatedAt": "2026-03-25T14:54:46.337Z"
     }
   ]
 }
