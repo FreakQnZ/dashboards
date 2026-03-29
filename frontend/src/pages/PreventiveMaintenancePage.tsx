@@ -53,6 +53,8 @@ import {
 } from "../api";
 import type { ToolSearchResult, PMEntry, AllToolsResult } from "../api";
 import { formatIndianNumber } from "../utils";
+import { useAuth } from "../auth/AuthContext";
+import { hasPlusAccess } from "../auth/permissions";
 
 // ── Add Tool Dialog ────────────────────────────────────────────────
 
@@ -711,6 +713,7 @@ const PMTableRowView = memo(function PMTableRowView({
   onConfirm,
   onDelete,
   onHistory,
+  canEdit,
 }: {
   index: number;
   row: ToolRow;
@@ -719,6 +722,7 @@ const PMTableRowView = memo(function PMTableRowView({
   onConfirm: (entry: PMEntry) => void;
   onDelete: (entry: PMEntry) => void;
   onHistory: (entry: PMEntry) => void;
+  canEdit: boolean;
 }) {
   const { tool, entry } = row;
   const latestMaintenance =
@@ -755,7 +759,7 @@ const PMTableRowView = memo(function PMTableRowView({
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
             <Tooltip title="Edit tool settings">
               <span>
-                <IconButton size="small" onClick={() => onEdit(entry)}>
+                <IconButton size="small" onClick={() => onEdit(entry)} disabled={!canEdit}>
                   <EditIcon fontSize="small" />
                 </IconButton>
               </span>
@@ -769,14 +773,14 @@ const PMTableRowView = memo(function PMTableRowView({
             </Tooltip>
             <Tooltip title="Delete tool">
               <span>
-                <IconButton size="small" color="error" onClick={() => onDelete(entry)}>
+                <IconButton size="small" color="error" onClick={() => onDelete(entry)} disabled={!canEdit}>
                   <DeleteIcon fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
             <Tooltip title="Confirm PM">
               <span>
-                <IconButton size="small" color="success" onClick={() => onConfirm(entry)}>
+                <IconButton size="small" color="success" onClick={() => onConfirm(entry)} disabled={!canEdit}>
                   <CheckCircleIcon fontSize="small" />
                 </IconButton>
               </span>
@@ -788,6 +792,7 @@ const PMTableRowView = memo(function PMTableRowView({
             variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => onConfigure(tool)}
+            disabled={!canEdit}
           >
             Configure
           </Button>
@@ -800,6 +805,8 @@ const PMTableRowView = memo(function PMTableRowView({
 // ── Main Page ──────────────────────────────────────────────────────
 
 export default function PreventiveMaintenancePage() {
+  const { permissions } = useAuth();
+  const canEdit = hasPlusAccess(permissions, "preventive_maintenance");
   const [addOpen, setAddOpen] = useState(false);
   const [addInitialTool, setAddInitialTool] = useState<AllToolsResult | null>(null);
   const [editEntry, setEditEntry] = useState<PMEntry | null>(null);
@@ -1065,6 +1072,7 @@ export default function PreventiveMaintenancePage() {
                   onConfirm={setConfirmEntry}
                   onDelete={setDeleteEntry}
                   onHistory={setHistoryEntry}
+                  canEdit={canEdit}
                 />
               ))}
             </TableBody>

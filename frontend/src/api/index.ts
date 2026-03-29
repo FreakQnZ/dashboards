@@ -59,3 +59,9 @@ export {
   useExportReport,
 } from "./reportsQueries";
 export type { ReportGroup, ReportDefinition, ReportRunResult } from "./reportsQueries";
+export {
+  useAdminUsers,
+  useRbacStore,
+  useUpdateUserPermissions,
+} from "./adminQueries";
+export type { AdminUser, UserPermissions, RbacStoreResponse } from "./adminQueries";

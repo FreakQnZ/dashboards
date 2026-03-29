@@ -19,17 +19,29 @@ import FactoryIcon from "@mui/icons-material/Factory";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import { useAuth } from "../auth/AuthContext";
+import { hasAccess, type DashboardKey } from "../auth/permissions";
 
 const DRAWER_WIDTH = 240;
 
-const navItems = [
+type NavItem = {
+  label: string;
+  icon: React.ReactNode;
+  path: string;
+  accessKey?: DashboardKey;
+  adminOnly?: boolean;
+};
+
+const navItems: NavItem[] = [
   { label: "Home", icon: <HomeIcon />, path: "/" },
-  { label: "Tools", icon: <BuildIcon />, path: "/dashboards/tools" },
-  { label: "Preventive Maintenance", icon: <HandymanIcon />, path: "/preventive-maintenance" },
-  { label: "Life Report", icon: <AssessmentIcon />, path: "/life-report" },
-  { label: "Production", icon: <FactoryIcon />, path: "/production" },
-  { label: "RM Variance", icon: <CompareArrowsIcon />, path: "/rm-variance" },
-  { label: "Reports", icon: <QueryStatsIcon />, path: "/reports" },
+  { label: "Tools", icon: <BuildIcon />, path: "/dashboards/tools", accessKey: "tools" },
+  { label: "Preventive Maintenance", icon: <HandymanIcon />, path: "/preventive-maintenance", accessKey: "preventive_maintenance" },
+  { label: "Life Report", icon: <AssessmentIcon />, path: "/life-report", accessKey: "life_report" },
+  { label: "Production", icon: <FactoryIcon />, path: "/production", accessKey: "production" },
+  { label: "RM Variance", icon: <CompareArrowsIcon />, path: "/rm-variance", accessKey: "rm_variance" },
+  { label: "Reports", icon: <QueryStatsIcon />, path: "/reports", accessKey: "reports" },
+  { label: "RBAC Admin", icon: <DashboardIcon />, path: "/admin/rbac", adminOnly: true },
 ];
 
 interface DashboardLayoutProps {
@@ -41,6 +53,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [appBarVisible, setAppBarVisible] = useState(false);
   const hideTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const location = useLocation();
+  const { permissions, user, logout } = useAuth();
 
   const showBar = () => {
     if (hideTimeout.current) clearTimeout(hideTimeout.current);
@@ -55,18 +68,29 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     <>
       <Toolbar />
       <List>
-        {navItems.map((item) => (
-          <ListItemButton
-            key={item.label}
-            component={RouterLink}
-            to={item.path}
-            selected={location.pathname === item.path}
-            onClick={() => setDrawerOpen(false)}
-          >
-            <ListItemIcon>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} />
-          </ListItemButton>
-        ))}
+        {navItems.map((item) => {
+          if (item.adminOnly && !user?.isAdmin) {
+            return null;
+          }
+          const disabled = item.accessKey ? !hasAccess(permissions, item.accessKey) : false;
+          const linkProps = disabled
+            ? { component: "div" as const }
+            : { component: RouterLink, to: item.path };
+
+          return (
+            <ListItemButton
+              key={item.label}
+              {...linkProps}
+              disabled={disabled}
+              selected={location.pathname === item.path}
+              onClick={() => setDrawerOpen(false)}
+              sx={disabled ? { opacity: 0.5 } : undefined}
+            >
+              <ListItemIcon>{item.icon}</ListItemIcon>
+              <ListItemText primary={item.label} />
+            </ListItemButton>
+          );
+        })}
       </List>
     </>
   );
@@ -109,6 +133,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <Typography variant="h6" noWrap>
             Manufacturing Dashboard
           </Typography>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button color="inherit" onClick={logout} sx={{ textTransform: "none" }}>
+            Logout
+          </Button>
         </Toolbar>
       </AppBar>
 

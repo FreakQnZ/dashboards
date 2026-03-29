@@ -4,6 +4,7 @@ import { db } from "../db";
 import { env } from "../env";
 import { mkdirSync, existsSync } from "fs";
 import { join, extname } from "path";
+import { requireAnyAccess, requirePlusAccess } from "../middleware";
 import {
   getEntries,
   addEntry,
@@ -17,14 +18,14 @@ import {
 const pm = new Hono();
 
 // GET / — list all PM entries (tool_life + maintenance history)
-pm.get("/", async (c) => {
+pm.get("/", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
   const entries = await getEntries();
   return c.json(entries);
 });
 
 // GET /status — PM entries relative to their next PM stroke target
 // ?threshold=N (default 80) — only return tools with pmPercentage >= N
-pm.get("/status", async (c) => {
+pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
   const thresholdParam = c.req.query("threshold");
   const threshold = thresholdParam !== undefined ? Number(thresholdParam) : 80;
 
@@ -82,7 +83,6 @@ pm.get("/status", async (c) => {
       range > 0
         ? Math.round(((totalLifetimeStrokes - pmCurrentStroke) / range) * 100)
         : 0;
-
     if (pmPercentage >= threshold) {
       results.push({
         toolId: Number(row.toolId),
@@ -104,14 +104,14 @@ pm.get("/status", async (c) => {
 });
 
 // GET /tool-strokes/:toolId — get total strokes for any tool (no tool_life entry required)
-pm.get("/tool-strokes/:toolId", async (c) => {
+pm.get("/tool-strokes/:toolId", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
   const toolId = Number(c.req.param("toolId"));
   const totalStrokes = await getToolStrokes(toolId);
   return c.json({ totalStrokes });
 });
 
 // POST / — add a new tool_life entry (optionally with initial PM record)
-pm.post("/", async (c) => {
+pm.post("/", requirePlusAccess("preventive_maintenance"), async (c) => {
   const body = await c.req.json<{
     toolId: number;
     toolNo: string;
@@ -134,7 +134,7 @@ pm.post("/", async (c) => {
 });
 
 // PATCH /:toolId — update tool life, PM strokes, and/or SPM
-pm.patch("/:toolId", async (c) => {
+pm.patch("/:toolId", requirePlusAccess("preventive_maintenance"), async (c) => {
   const toolId = Number(c.req.param("toolId"));
   const body = await c.req.json<{ toolLife?: number; pmStrokes?: number; spm?: number }>();
 
@@ -151,7 +151,7 @@ pm.patch("/:toolId", async (c) => {
 });
 
 // GET /:toolId/stroke-info — get current stroke and suggested next PM stroke
-pm.get("/:toolId/stroke-info", async (c) => {
+pm.get("/:toolId/stroke-info", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
   const toolId = Number(c.req.param("toolId"));
   try {
     const info = await getStrokeInfo(toolId);
@@ -162,7 +162,7 @@ pm.get("/:toolId/stroke-info", async (c) => {
 });
 
 // POST /:toolId/confirm — confirm maintenance done (supports multipart file upload)
-pm.post("/:toolId/confirm", async (c) => {
+pm.post("/:toolId/confirm", requirePlusAccess("preventive_maintenance"), async (c) => {
   const toolId = Number(c.req.param("toolId"));
   const contentType = c.req.header("content-type") || "";
 
@@ -216,7 +216,7 @@ pm.post("/:toolId/confirm", async (c) => {
 });
 
 // DELETE /:toolId — remove a tool_life entry and its maintenance records
-pm.delete("/:toolId", async (c) => {
+pm.delete("/:toolId", requirePlusAccess("preventive_maintenance"), async (c) => {
   const toolId = Number(c.req.param("toolId"));
 
   try {
@@ -228,7 +228,7 @@ pm.delete("/:toolId", async (c) => {
 });
 
 // GET /attachment/:filename — serve a saved PM attachment
-pm.get("/attachment/:filename", async (c) => {
+pm.get("/attachment/:filename", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
   const filename = c.req.param("filename");
   const filePath = join(env.PM_ATTACHMENTS_DIR, filename);
 

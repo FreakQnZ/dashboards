@@ -141,6 +141,16 @@ export interface PreventiveMaintenanceTable {
   PM_maintenance_attachment: string | null;
 }
 
+// ── users ───────────────────────────────────────────────────────
+export interface UsersTable {
+  US_ID: Generated<number>;
+  US_Login: string;
+  US_Password: string | null;
+  US_FirstName: string | null;
+  US_LastName: string | null;
+  US_CurrentYn: string | null;
+}
+
 // ── Database aggregate ─────────────────────────────────────────────
 export interface Database {
   scheduled_production: ScheduledProductionTable;
@@ -152,4 +162,5 @@ export interface Database {
   customer: CustomerTable;
   tool_life: ToolLifeTable;
   preventive_maintenance: PreventiveMaintenanceTable;
+  users: UsersTable;
 }

@@ -11,6 +11,9 @@ import AssessmentIcon from "@mui/icons-material/Assessment";
 import FactoryIcon from "@mui/icons-material/Factory";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
+import { useAuth } from "../auth/AuthContext";
+import Button from "@mui/material/Button";
+import { hasAccess } from "../auth/permissions";
 
 const dashboards = [
   {
@@ -19,6 +22,7 @@ const dashboards = [
     path: "/dashboards/tools",
     icon: <BuildIcon sx={{ fontSize: 48 }} />,
     color: "#d84315",
+    accessKey: "tools",
   },
   {
     title: "Preventive Maintenance",
@@ -26,6 +30,7 @@ const dashboards = [
     path: "/preventive-maintenance",
     icon: <HandymanIcon sx={{ fontSize: 48 }} />,
     color: "#00796b",
+    accessKey: "preventive_maintenance",
   },
   {
     title: "Life Report",
@@ -33,6 +38,7 @@ const dashboards = [
     path: "/life-report",
     icon: <AssessmentIcon sx={{ fontSize: 48 }} />,
     color: "#1976d2",
+    accessKey: "life_report",
   },
   {
     title: "Production",
@@ -40,6 +46,7 @@ const dashboards = [
     path: "/production",
     icon: <FactoryIcon sx={{ fontSize: 48 }} />,
     color: "#7b1fa2",
+    accessKey: "production",
   },
   {
     title: "RM Variance",
@@ -47,6 +54,7 @@ const dashboards = [
     path: "/rm-variance",
     icon: <CompareArrowsIcon sx={{ fontSize: 48 }} />,
     color: "#e65100",
+    accessKey: "rm_variance",
   },
   {
     title: "Reports",
@@ -54,21 +62,33 @@ const dashboards = [
     path: "/reports",
     icon: <QueryStatsIcon sx={{ fontSize: 48 }} />,
     color: "#455a64",
+    accessKey: "reports",
   },
 ];
 
 export default function LandingPage() {
+  const { permissions, user, logout } = useAuth();
+
   return (
     <Box sx={{ maxWidth: 1200, mx: "auto", py: 4, px: 3 }}>
-      <Typography variant="h3" fontWeight={700} gutterBottom>
-        Dashboards
-      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+        <Typography variant="h3" fontWeight={700} gutterBottom>
+          Dashboards
+        </Typography>
+        {user && (
+          <Button variant="outlined" onClick={logout} sx={{ textTransform: "none" }}>
+            Logout
+          </Button>
+        )}
+      </Box>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 5 }}>
         Select a dashboard or tool to get started.
       </Typography>
 
       <Grid container spacing={3}>
-        {dashboards.map((d) => (
+        {dashboards.map((d) => {
+          const enabled = hasAccess(permissions, d.accessKey);
+          return (
           <Grid key={d.path} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
             <Card
               sx={{
@@ -78,12 +98,20 @@ export default function LandingPage() {
                   transform: "translateY(-4px)",
                   boxShadow: 6,
                 },
+                ...(enabled
+                  ? {}
+                  : {
+                      opacity: 0.5,
+                      filter: "grayscale(0.6)",
+                      boxShadow: "none",
+                    }),
               }}
             >
               <CardActionArea
                 component={RouterLink}
                 to={d.path}
                 sx={{ height: "100%" }}
+                disabled={!enabled}
               >
                 <CardContent
                   sx={{
@@ -106,7 +134,8 @@ export default function LandingPage() {
               </CardActionArea>
             </Card>
           </Grid>
-        ))}
+        );
+        })}
       </Grid>
     </Box>
   );

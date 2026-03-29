@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { sql } from "kysely";
 import { db } from "../db";
+import { requireAccess } from "../middleware";
 
 const rmVariance = new Hono();
+
+rmVariance.use("*", requireAccess("rm_variance"));
 
 /**
  * GET /api/rm-variance/:month/:year/:plantId

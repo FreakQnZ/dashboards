@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { sql } from "kysely";
 import { db } from "../db";
+import { requireAccess } from "../middleware";
 
 const production = new Hono();
+
+production.use("*", requireAccess("production"));
 
 /**
  * GET /api/production/:ddmmyyyy

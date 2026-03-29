@@ -23,6 +23,12 @@
       "name": "Production",
       "createdAt": "2026-03-23T11:09:27.642Z",
       "updatedAt": "2026-03-23T11:09:27.642Z"
+    },
+    {
+      "id": "6101d706-5e08-4340-9262-232bdf588bf1",
+      "name": "Test",
+      "createdAt": "2026-03-28T08:01:08.229Z",
+      "updatedAt": "2026-03-28T08:01:08.229Z"
     }
   ],
   "reports": [
@@ -180,15 +186,6 @@
       "updatedAt": "2026-03-24T02:32:14.428Z"
     },
     {
-      "id": "819ce9dd-3716-43b6-8bef-6362456be940",
-      "groupId": "b6873db9-b4b6-4baa-b175-2bec5286cba7",
-      "name": "Component STock",
-      "queryTemplate": "Select * from Component",
-      "variables": [],
-      "createdAt": "2026-03-24T06:38:20.979Z",
-      "updatedAt": "2026-03-24T06:38:20.979Z"
-    },
-    {
       "id": "ed95ec7b-1c11-4e58-8adb-524421ea224c",
       "groupId": "7c1483f0-5d23-4243-83cd-595edb469808",
       "name": "Distinct Tools with PartNos",
@@ -196,6 +193,18 @@
       "variables": [],
       "createdAt": "2026-03-25T12:13:51.363Z",
       "updatedAt": "2026-03-25T14:54:46.337Z"
+    },
+    {
+      "id": "c08d3c11-8643-4217-8d9d-6a139a93c956",
+      "groupId": "6101d706-5e08-4340-9262-232bdf588bf1",
+      "name": "test",
+      "queryTemplate": "SELECT\n  CU_Name AS customerName,\n  CO_partNo AS partNo,\n  CO_partName AS partName,\n  CS_PLANTID AS unit,\n  DATE_FORMAT(CS_DATE, '%d-%m-%Y') AS requestedDate,\n  CS_QTY AS customerRequestedQty,\n  SD_LOTSIZE AS dispatchedQty,\n  SD_INVOICE AS invoiceNumber,\n  DATE_FORMAT(SD_DISPATCHDATE, '%d-%m-%Y') AS invoiceDate\nFROM scheduled_customerdispatch\nINNER JOIN scheduled_customer ON SD_CSID = CS_Id\nINNER JOIN customer ON CU_Id = CS_CUSTID\nINNER JOIN schedule_details ON SC_Id = CS_SCID\nINNER JOIN components ON CO_Id = SC_COMPID\nINNER JOIN dispatch_status ON DS_Id = SD_Status\nWHERE SD_Status = 7\n  AND CS_Date BETWEEN {fromDate} AND {toDate};",
+      "variables": [
+        "fromDate",
+        "toDate"
+      ],
+      "createdAt": "2026-03-28T08:01:13.935Z",
+      "updatedAt": "2026-03-28T08:01:13.935Z"
     }
   ]
 }

@@ -6,3 +6,5 @@ export { default as ProductionDashboardPage } from "./ProductionDashboardPage";
 export { default as RMVariancePage } from "./RMVariancePage";
 export { default as ReportsPage } from "./ReportsPage";
 export { default as RunReportPage } from "./RunReportPage";
+export { default as LoginPage } from "./LoginPage";
+export { default as RbacAdminPage } from "./RbacAdminPage";

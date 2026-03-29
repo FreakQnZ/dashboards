@@ -8,6 +8,8 @@ const envSchema = z.object({
   DB_NAME: z.string().default("erp"),
   PORT: z.coerce.number().default(3001),
   PM_ATTACHMENTS_DIR: z.string().default("../pm-attachments"),
+  JWT_SECRET: z.string().default("change-me"),
+  JWT_TTL_MINUTES: z.coerce.number().default(720),
 });
 
 export const env = envSchema.parse(process.env);

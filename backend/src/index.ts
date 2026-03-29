@@ -1,7 +1,17 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
-import { corsMiddleware, logger } from "./middleware";
-import { healthRoutes, toolsRoutes, pmRoutes, scheduleRoutes, productionRoutes, rmVarianceRoutes, reportsRoutes } from "./routes";
+import { corsMiddleware, logger, authMiddleware } from "./middleware";
+import {
+  healthRoutes,
+  toolsRoutes,
+  pmRoutes,
+  scheduleRoutes,
+  productionRoutes,
+  rmVarianceRoutes,
+  reportsRoutes,
+  authRoutes,
+  adminRoutes,
+} from "./routes";
 import { env } from "./env";
 import { join } from "path";
 
@@ -10,9 +20,13 @@ const app = new Hono();
 // Global middleware
 app.use("*", corsMiddleware);
 app.use("*", logger);
+app.use("/api/*", authMiddleware);
+app.use("/schedule*", authMiddleware);
 
 // ================= API ROUTES =================
 app.route("/api/health", healthRoutes);
+app.route("/api/auth", authRoutes);
+app.route("/api/admin", adminRoutes);
 app.route("/api/tools", toolsRoutes);
 app.route("/api/pm", pmRoutes);
 app.route("/schedule", scheduleRoutes);

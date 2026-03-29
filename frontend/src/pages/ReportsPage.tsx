@@ -32,6 +32,8 @@ import {
   useReports,
   useUpdateReport,
 } from "@/api";
+import { useAuth } from "../auth/AuthContext";
+import { hasPlusAccess } from "../auth/permissions";
 
 function CreateGroupDialog({
   open,
@@ -190,6 +192,8 @@ function CreateReportDialog({
 }
 
 export default function ReportsPage() {
+  const { permissions } = useAuth();
+  const canEdit = hasPlusAccess(permissions, "reports");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
@@ -333,6 +337,7 @@ export default function ReportsPage() {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setGroupDialogOpen(true)}
+              disabled={!canEdit}
             >
               Add
             </Button>
@@ -353,6 +358,7 @@ export default function ReportsPage() {
                   color="error"
                   aria-label={`Delete group ${group.name}`}
                   onClick={() => setDeletingGroup({ id: group.id, name: group.name })}
+                  disabled={!canEdit}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -381,7 +387,7 @@ export default function ReportsPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              disabled={!selectedGroup}
+              disabled={!selectedGroup || !canEdit}
               onClick={() => setReportDialogOpen(true)}
             >
               New Report
@@ -415,6 +421,7 @@ export default function ReportsPage() {
                             queryTemplate: report.queryTemplate,
                           })
                         }
+                        disabled={!canEdit}
                       >
                         Edit
                       </Button>
@@ -432,6 +439,7 @@ export default function ReportsPage() {
                         color="error"
                         startIcon={<DeleteIcon />}
                         onClick={() => setDeletingReport({ id: report.id, name: report.name })}
+                        disabled={!canEdit}
                       >
                         Delete
                       </Button>

@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { db } from "../db";
 import { sql } from "kysely";
+import { requireAccess } from "../middleware";
 
 const tools = new Hono();
+
+tools.use("*", requireAccess("tools"));
 
 function isValidDateParam(value: string | undefined): value is string {
   return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);

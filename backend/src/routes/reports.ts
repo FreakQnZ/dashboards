@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import ExcelJS from "exceljs";
 import { createPool } from "mysql2/promise";
 import { env } from "../env";
+import { requireAccess, requirePlusAccess } from "../middleware";
 import {
   compileReportQuery,
   createGroup,
@@ -15,6 +16,8 @@ import {
 } from "../db/reportsStore";
 
 const reports = new Hono();
+
+reports.use("*", requireAccess("reports"));
 
 const reportQueryPool = createPool({
   host: env.DB_HOST,
@@ -56,7 +59,7 @@ reports.get("/groups", async (c) => {
   return c.json(groups);
 });
 
-reports.post("/groups", async (c) => {
+reports.post("/groups", requirePlusAccess("reports"), async (c) => {
   const body = await c.req.json<{ name?: string }>();
 
   if (!body.name) {
@@ -71,7 +74,7 @@ reports.post("/groups", async (c) => {
   }
 });
 
-reports.delete("/groups/:groupId", async (c) => {
+reports.delete("/groups/:groupId", requirePlusAccess("reports"), async (c) => {
   const groupId = c.req.param("groupId");
 
   try {
@@ -101,7 +104,7 @@ reports.get("/reports/:reportId", async (c) => {
   return c.json(report);
 });
 
-reports.post("/reports", async (c) => {
+reports.post("/reports", requirePlusAccess("reports"), async (c) => {
   const body = await c.req.json<{
     groupId?: string;
     name?: string;
@@ -127,7 +130,7 @@ reports.post("/reports", async (c) => {
   }
 });
 
-reports.patch("/reports/:reportId", async (c) => {
+reports.patch("/reports/:reportId", requirePlusAccess("reports"), async (c) => {
   const reportId = c.req.param("reportId");
   const body = await c.req.json<{ name?: string; queryTemplate?: string }>();
 
@@ -148,7 +151,7 @@ reports.patch("/reports/:reportId", async (c) => {
   }
 });
 
-reports.delete("/reports/:reportId", async (c) => {
+reports.delete("/reports/:reportId", requirePlusAccess("reports"), async (c) => {
   const reportId = c.req.param("reportId");
 
   try {

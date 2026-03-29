@@ -2,8 +2,11 @@ import { Hono } from "hono";
 import { sql } from "kysely";
 import { db } from "../db";
 import ExcelJS from "exceljs";
+import { requireAccess } from "../middleware";
 
 const schedule = new Hono();
+
+schedule.use("*", requireAccess("production"));
 
 /**
  * GET /api/schedule/export?month=1&year=2026

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { apiFetch, getAuthToken } from "./client";
 
 export interface ReportGroup {
   id: string;
@@ -161,13 +161,21 @@ export function useExportReport() {
       asOf?: string;
     }) => {
       const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+      const token = getAuthToken();
       const res = await fetch(`${API_BASE}/api/reports/reports/${payload.reportId}/export`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ variables: payload.variables ?? {}, asOf: payload.asOf }),
       });
+
+      if (res.status === 401 || res.status === 403) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth:logout"));
+        }
+      }
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({ message: res.statusText }));

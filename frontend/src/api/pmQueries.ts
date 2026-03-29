@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "./client";
+import { apiFetch, getAuthToken } from "./client";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -141,13 +141,21 @@ export function useConfirmMaintenance() {
       }
 
       const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+      const token = getAuthToken();
       const res = await fetch(
         `${API_BASE}/api/pm/${data.toolId}/confirm`,
         {
           method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           body: formData,
         }
       );
+
+      if (res.status === 401 || res.status === 403) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth:logout"));
+        }
+      }
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({ message: res.statusText }));
