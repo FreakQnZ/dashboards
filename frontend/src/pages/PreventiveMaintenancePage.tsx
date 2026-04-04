@@ -30,6 +30,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import SearchIcon from "@mui/icons-material/Search";
 import HistoryIcon from "@mui/icons-material/History";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DownloadIcon from "@mui/icons-material/Download";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -50,6 +51,7 @@ import {
   useConfirmMaintenance,
   useDeletePMEntry,
   useStrokeInfo,
+  useExportPM,
 } from "../api";
 import type { ToolSearchResult, PMEntry, AllToolsResult } from "../api";
 import { formatIndianNumber } from "../utils";
@@ -820,6 +822,7 @@ export default function PreventiveMaintenancePage() {
   const { data: entries = [], isLoading: pmLoading } = usePMEntries();
   const { data: allTools = [], isLoading: toolsLoading } = useAllTools();
   const { data: pmStatusAll = [] } = usePMStatusAll();
+  const exportPM = useExportPM();
 
   const isLoading = pmLoading || toolsLoading;
 
@@ -908,6 +911,15 @@ export default function PreventiveMaintenancePage() {
     setAddInitialTool(null);
   }, []);
 
+  const handleExportExcel = useCallback(() => {
+    exportPM.mutate({
+      mode: thresholdFilter,
+      search: searchFilter.trim(),
+      asOf: new Date().toISOString(),
+      fileName: "preventive_maintenance.xlsx",
+    });
+  }, [exportPM, thresholdFilter, searchFilter]);
+
   return (
     <Box
       sx={{
@@ -950,6 +962,17 @@ export default function PreventiveMaintenancePage() {
         />
 
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={
+              exportPM.isPending ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />
+            }
+            onClick={handleExportExcel}
+            disabled={exportPM.isPending || isLoading}
+          >
+            Export Excel
+          </Button>
           <Button
             size="small"
             variant={thresholdFilter === "safe" ? "contained" : "outlined"}

@@ -215,3 +215,47 @@ export function usePMStatusAll() {
     refetchInterval: 60_000,
   });
 }
+
+export function useExportPM() {
+  return useMutation({
+    mutationFn: async (payload: {
+      mode: "all" | "safe" | "warning" | "critical";
+      search?: string;
+      asOf?: string;
+      fileName?: string;
+    }) => {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+      const token = getAuthToken();
+      const params = new URLSearchParams();
+      params.set("mode", payload.mode);
+      if (payload.search) params.set("search", payload.search);
+      if (payload.asOf) params.set("asOf", payload.asOf);
+
+      const res = await fetch(`${API_BASE}/api/pm/export?${params.toString()}`, {
+        method: "GET",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth:logout"));
+        }
+      }
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(error.message || `API error: ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = payload.fileName ?? "preventive_maintenance.xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(downloadUrl);
+    },
+  });
+}

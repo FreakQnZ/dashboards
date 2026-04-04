@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { sql } from "kysely";
+import ExcelJS from "exceljs";
 import { db } from "../db";
 import { env } from "../env";
 import { mkdirSync, existsSync } from "fs";
@@ -16,6 +17,22 @@ import {
 } from "../db/pmStore";
 
 const pm = new Hono();
+
+type PMExportMode = "all" | "safe" | "warning" | "critical";
+
+function parsePMExportMode(value: string | undefined): PMExportMode {
+  if (value === "safe" || value === "warning" || value === "critical") {
+    return value;
+  }
+  return "all";
+}
+
+function matchPMThreshold(mode: PMExportMode, pmPercentage: number): boolean {
+  if (mode === "critical") return pmPercentage >= 100;
+  if (mode === "warning") return pmPercentage >= 80 && pmPercentage < 100;
+  if (mode === "safe") return pmPercentage < 80;
+  return true;
+}
 
 // GET / — list all PM entries (tool_life + maintenance history)
 pm.get("/", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
@@ -101,6 +118,164 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
   }
 
   return c.json(results);
+});
+
+// GET /export — export PM dashboard table to Excel
+// query: mode=all|safe|warning|critical, search=text, asOf=ISO
+pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), async (c) => {
+  const mode = parsePMExportMode(c.req.query("mode"));
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
+  const asOf = c.req.query("asOf");
+
+  const allTools = await db
+    .selectFrom("components_tool")
+    .innerJoin("components as c", "c.CO_ID", "components_tool.CT_COMPID")
+    .select([
+      "components_tool.CT_ID as id",
+      "components_tool.CT_TOOLNO as toolNo",
+      "c.CO_PARTNO as partNo",
+    ])
+    .where("components_tool.CT_ACTIVEYN", "=", "Y")
+    .orderBy("components_tool.CT_TOOLNO", "asc")
+    .execute();
+
+  const entries = await getEntries();
+  const entryByToolId = new Map(entries.map((entry) => [entry.toolId, entry]));
+
+  const statusRows = await sql<{
+    toolId: number;
+    pmCurrentStroke: number;
+    nextStroke: number;
+    totalLifetimeStrokes: number;
+  }>`
+    SELECT
+      tl.TL_tool_id AS toolId,
+      pm.PM_current_stroke AS pmCurrentStroke,
+      pm.PM_next_stroke AS nextStroke,
+      COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes
+    FROM tool_life tl
+    INNER JOIN preventive_maintenance pm
+      ON pm.PM_id = (
+        SELECT MAX(pm2.PM_id)
+        FROM preventive_maintenance pm2
+        WHERE pm2.PM_tool_id = tl.TL_tool_id
+      )
+    LEFT JOIN (
+      SELECT PD_TOOLID, SUM(PD_PRODQTY) AS totalStrokes
+      FROM production_details
+      GROUP BY PD_TOOLID
+    ) strokes ON strokes.PD_TOOLID = tl.TL_tool_id
+  `.execute(db);
+
+  const statusByToolId = new Map(
+    statusRows.rows.map((row) => {
+      const pmCurrentStroke = Number(row.pmCurrentStroke);
+      const nextStroke = Number(row.nextStroke);
+      const totalLifetimeStrokes = Number(row.totalLifetimeStrokes);
+      const range = nextStroke - pmCurrentStroke;
+      const pmPercentage =
+        range > 0
+          ? Math.round(((totalLifetimeStrokes - pmCurrentStroke) / range) * 100)
+          : 0;
+
+      return [
+        Number(row.toolId),
+        {
+          totalLifetimeStrokes,
+          pmPercentage,
+        },
+      ] as const;
+    })
+  );
+
+  const exportRows = allTools
+    .map((tool, index) => {
+      const entry = entryByToolId.get(Number(tool.id));
+      const status = statusByToolId.get(Number(tool.id));
+      const latestMaintenance =
+        entry && entry.maintenanceHistory.length > 0
+          ? entry.maintenanceHistory[entry.maintenanceHistory.length - 1]
+          : null;
+
+      const pmPercentage = status?.pmPercentage ?? 0;
+
+      return {
+        slNo: index + 1,
+        toolNo: tool.toolNo,
+        partNo: tool.partNo ?? "",
+        toolLife: entry?.toolLife ?? null,
+        spm: entry?.spm ?? null,
+        pmStrokes: entry?.pmStrokes ?? null,
+        productionDone: status?.totalLifetimeStrokes ?? (entry ? 0 : null),
+        nextPmStroke: entry ? latestMaintenance?.nextStroke ?? "Not set" : null,
+        lastMaintenance: entry
+          ? latestMaintenance
+            ? new Date(latestMaintenance.date).toLocaleDateString("en-IN", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })
+            : "No maintenance"
+          : null,
+        pmCount: entry ? entry.maintenanceHistory.length : null,
+        pmPercentage,
+      };
+    })
+    .filter((row) => {
+      if (!matchPMThreshold(mode, row.pmPercentage)) {
+        return false;
+      }
+      if (!search) {
+        return true;
+      }
+      return (
+        row.toolNo.toLowerCase().includes(search) ||
+        row.partNo.toLowerCase().includes(search)
+      );
+    });
+
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Preventive Maintenance");
+
+  worksheet.columns = [
+    { header: "Sl No", key: "slNo", width: 8 },
+    { header: "Tool No", key: "toolNo", width: 20 },
+    { header: "Part No", key: "partNo", width: 20 },
+    { header: "Tool Life", key: "toolLife", width: 14 },
+    { header: "SPM", key: "spm", width: 10 },
+    { header: "PM Strokes", key: "pmStrokes", width: 14 },
+    { header: "Production Done", key: "productionDone", width: 18 },
+    { header: "Next PM Stroke", key: "nextPmStroke", width: 16 },
+    { header: "Last Maintenance", key: "lastMaintenance", width: 18 },
+    { header: "PM Count", key: "pmCount", width: 10 },
+    { header: "PM %", key: "pmPercentage", width: 10 },
+  ];
+
+  for (const row of exportRows) {
+    worksheet.addRow(row);
+  }
+
+  const asOfDate = asOf ? new Date(asOf) : new Date();
+  const validAsOf = Number.isNaN(asOfDate.getTime()) ? new Date() : asOfDate;
+  const headingText = `Preventive Maintenance as on ${validAsOf.toLocaleString("en-IN")}`;
+
+  worksheet.insertRow(1, [headingText]);
+  worksheet.insertRow(2, []);
+  worksheet.mergeCells(1, 1, 1, 11);
+
+  const headingCell = worksheet.getCell(1, 1);
+  headingCell.font = { bold: true, size: 13 };
+
+  worksheet.getRow(3).font = { bold: true };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  return new Response(Buffer.from(buffer), {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": "attachment; filename=\"preventive_maintenance.xlsx\"",
+    },
+  });
 });
 
 // GET /tool-strokes/:toolId — get total strokes for any tool (no tool_life entry required)
