@@ -24,11 +24,13 @@ type ToolMachineRow = {
   drawingNo: string;
   partNo: string;
   partName: string;
+  cavity: number;
   machineId: number;
   machineName: string;
   machineCapacity: string;
   machineMake: string;
   scheduledQty: number;
+  scheduledStrokes: number;
 };
 
 async function getToolsForDate(
@@ -55,11 +57,13 @@ async function getToolsForDate(
       "ct.CT_DRAWINGNO as drawingNo",
       "c.CO_PARTNO as partNo",
       "c.CO_PARTNAME as partName",
+      sql<number>`GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)`.as("cavity"),
       "ps.PS_MCID as machineId",
       "mm.MCM_Name as machineName",
       "mm.MCM_Capacity as machineCapacity",
       "mm.MCM_Make as machineMake",
       "ps.PS_QTY as scheduledQty",
+      sql<number>`ps.PS_QTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)`.as("scheduledStrokes"),
     ])
     .where(sql<boolean>`ps.PS_DATE = ${dateSql}`)
     .orderBy("ct.CT_TOOLNO", "asc")
@@ -74,14 +78,17 @@ async function getToolsForDate(
       drawingNo: string;
       partNo: string;
       partName: string;
+      cavity: number;
       machineCount: number;
       totalScheduledQty: number;
+      totalScheduledStrokes: number;
       machines: Array<{
         machineId: number;
         machineName: string;
         machineCapacity: string;
         machineMake: string;
         scheduledQty: number;
+        scheduledStrokes: number;
       }>;
     }
   >();
@@ -94,8 +101,10 @@ async function getToolsForDate(
         drawingNo: row.drawingNo,
         partNo: row.partNo,
         partName: row.partName,
+        cavity: Number(row.cavity),
         machineCount: 0,
         totalScheduledQty: 0,
+        totalScheduledStrokes: 0,
         machines: [],
       });
     }
@@ -107,8 +116,10 @@ async function getToolsForDate(
       machineCapacity: row.machineCapacity,
       machineMake: row.machineMake,
       scheduledQty: Number(row.scheduledQty),
+      scheduledStrokes: Number(row.scheduledStrokes),
     });
     tool.totalScheduledQty += Number(row.scheduledQty);
+    tool.totalScheduledStrokes += Number(row.scheduledStrokes);
   }
 
   for (const tool of toolMap.values()) {
@@ -143,11 +154,12 @@ tools.get("/all", async (c) => {
     .selectFrom("components_tool")
     .innerJoin("components as c", "c.CO_ID", "components_tool.CT_COMPID")
     .select([
-      "components_tool.CT_ID as id",
+      sql<number>`MIN(components_tool.CT_ID)`.as("id"),
       "components_tool.CT_TOOLNO as toolNo",
-      "c.CO_PARTNO as partNo"
+      sql<string>`GROUP_CONCAT(DISTINCT c.CO_PARTNO ORDER BY c.CO_PARTNO SEPARATOR ', ')`.as("partNo"),
     ])
     .where("components_tool.CT_ACTIVEYN", "=", "Y")
+    .groupBy("components_tool.CT_TOOLNO")
     .orderBy("components_tool.CT_TOOLNO", "asc")
     .execute();
 
@@ -163,9 +175,13 @@ tools.get("/search", async (c) => {
 
   const rows = await db
     .selectFrom("components_tool")
-    .select(["CT_ID as id", "CT_TOOLNO as toolNo"])
+    .select([
+      sql<number>`MIN(CT_ID)`.as("id"),
+      "CT_TOOLNO as toolNo",
+    ])
     .where("CT_ACTIVEYN", "=", "Y")
     .where("CT_TOOLNO", "like", `%${q}%`)
+    .groupBy("CT_TOOLNO")
     .orderBy("CT_TOOLNO", "asc")
     .limit(20)
     .execute();

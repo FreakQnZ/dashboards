@@ -119,9 +119,11 @@ interface ToolScheduleEntry {
   toolNo: string;
   partNo: string;
   partName: string;
+  cavity: number;
   machineId: number;
   machineName: string;
   scheduledQty: number;
+  scheduledStrokes: number;
 }
 
 /** Flatten grouped tool data into one entry per machine schedule */
@@ -132,9 +134,11 @@ function flattenTools(tools: ToolWithMachines[]): ToolScheduleEntry[] {
       toolNo: t.toolNo,
       partNo: t.partNo,
       partName: t.partName,
+      cavity: t.cavity,
       machineId: m.machineId,
       machineName: m.machineName,
       scheduledQty: m.scheduledQty,
+      scheduledStrokes: m.scheduledStrokes,
     })),
   );
 }
@@ -187,7 +191,7 @@ function ToolCard({ entry, pmEntry }: { entry: ToolScheduleEntry; pmEntry?: PMSt
   // Projected PM %: how far (totalStrokes + scheduledQty) is from pmCurrentStroke toward nextStroke
   const pmRange = hasPM ? (pmEntry!.nextStroke - pmEntry!.pmCurrentStroke) : 0;
   const projectedPmPct = hasPM && pmRange > 0
-    ? Math.round(((pmEntry!.totalLifetimeStrokes + entry.scheduledQty - pmEntry!.pmCurrentStroke) / pmRange) * 100)
+    ? Math.round(((pmEntry!.totalLifetimeStrokes + entry.scheduledStrokes - pmEntry!.pmCurrentStroke) / pmRange) * 100)
     : 0;
 
   const willCross100 = hasPM && projectedPmPct >= 100;
@@ -523,10 +527,10 @@ export default function ToolsDashboardPage() {
 
   const isLoading = todayLoading || futureLoading || pmLoading || pmAllLoading || toolsCountLoading;
 
-  // Build a lookup map: toolId → PMStatusEntry
-  const pmByToolId = useMemo(() => {
-    const map = new Map<number, PMStatusEntry>();
-    for (const entry of pmAll) map.set(entry.toolId, entry);
+  // Build a lookup map: toolNo → PMStatusEntry
+  const pmByToolNo = useMemo(() => {
+    const map = new Map<string, PMStatusEntry>();
+    for (const entry of pmAll) map.set(entry.toolNo, entry);
     return map;
   }, [pmAll]);
 
@@ -792,7 +796,7 @@ export default function ToolsDashboardPage() {
               </Typography>
             )}
             {todayData?.tools && flattenTools(todayData.tools).map((entry) => (
-              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolId.get(entry.toolId)} />
+              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolNo.get(entry.toolNo)} />
             ))}
           </AutoScrollColumn>
         </Box>
@@ -870,7 +874,7 @@ export default function ToolsDashboardPage() {
               </Typography>
             )}
             {futureData?.tools && flattenTools(futureData.tools).map((entry) => (
-              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolId.get(entry.toolId)} />
+              <ToolCard key={`${entry.toolId}-${entry.machineId}`} entry={entry} pmEntry={pmByToolNo.get(entry.toolNo)} />
             ))}
           </AutoScrollColumn>
         </Box>

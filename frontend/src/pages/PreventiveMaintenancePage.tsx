@@ -63,12 +63,12 @@ import { hasPlusAccess } from "../auth/permissions";
 function AddToolDialog({
   open,
   onClose,
-  existingToolIds,
+  existingToolNos,
   initialTool = null,
 }: {
   open: boolean;
   onClose: () => void;
-  existingToolIds: Set<number>;
+  existingToolNos: Set<string>;
   initialTool?: AllToolsResult | null;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,12 +158,12 @@ function AddToolDialog({
             <Autocomplete
               options={searchResults}
               getOptionLabel={(opt) => opt.toolNo}
-              getOptionDisabled={(opt) => existingToolIds.has(opt.id)}
+              getOptionDisabled={(opt) => existingToolNos.has(opt.toolNo)}
               renderOption={(props, opt) => (
                 <li {...props} key={opt.id}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
                     <span>{opt.toolNo}</span>
-                    {existingToolIds.has(opt.id) && (
+                    {existingToolNos.has(opt.toolNo) && (
                       <Chip label="Already added" size="small" color="default" />
                     )}
                   </Box>
@@ -827,23 +827,37 @@ export default function PreventiveMaintenancePage() {
   const isLoading = pmLoading || toolsLoading;
 
   // Set of already-added toolIds (for disabling in add dialog)
-  const existingToolIds = useMemo(
-    () => new Set(entries.map((e) => e.toolId)),
+  const existingToolNos = useMemo(
+    () => new Set(entries.map((e) => e.toolNo)),
     [entries]
   );
 
-  const entryByToolId = useMemo(
-    () => new Map(entries.map((entry) => [entry.toolId, entry])),
+  const entryByToolNo = useMemo(
+    () => {
+      const map = new Map<string, PMEntry>();
+      for (const entry of entries) {
+        const existing = map.get(entry.toolNo);
+        if (!existing) {
+          map.set(entry.toolNo, entry);
+          continue;
+        }
+
+        if (new Date(entry.createdAt).getTime() >= new Date(existing.createdAt).getTime()) {
+          map.set(entry.toolNo, entry);
+        }
+      }
+      return map;
+    },
     [entries]
   );
 
-  const pmPercentageByToolId = useMemo(
-    () => new Map(pmStatusAll.map((status) => [status.toolId, status.pmPercentage])),
+  const pmPercentageByToolNo = useMemo(
+    () => new Map(pmStatusAll.map((status) => [status.toolNo, status.pmPercentage])),
     [pmStatusAll]
   );
 
-  const totalLifetimeStrokesByToolId = useMemo(
-    () => new Map(pmStatusAll.map((status) => [status.toolId, status.totalLifetimeStrokes])),
+  const totalLifetimeStrokesByToolNo = useMemo(
+    () => new Map(pmStatusAll.map((status) => [status.toolNo, status.totalLifetimeStrokes])),
     [pmStatusAll]
   );
 
@@ -852,20 +866,20 @@ export default function PreventiveMaintenancePage() {
     return allTools.map((tool) => ({
       tool,
       entry: (() => {
-        const entry = entryByToolId.get(tool.id);
+        const entry = entryByToolNo.get(tool.toolNo);
         if (!entry) return null;
         return {
           ...entry,
-          totalLifetimeStrokes: totalLifetimeStrokesByToolId.get(tool.id) ?? 0,
+          totalLifetimeStrokes: totalLifetimeStrokesByToolNo.get(tool.toolNo) ?? 0,
         };
       })(),
     }));
-  }, [allTools, entryByToolId, totalLifetimeStrokesByToolId]);
+  }, [allTools, entryByToolNo, totalLifetimeStrokesByToolNo]);
 
   const filteredRows = useMemo(() => {
     const matchesThreshold = (row: ToolRow) => {
       if (thresholdFilter === "all") return true;
-      const pmPct = pmPercentageByToolId.get(row.tool.id);
+      const pmPct = pmPercentageByToolNo.get(row.tool.toolNo);
       if (thresholdFilter === "critical") return (pmPct ?? 0) >= 100;
       if (thresholdFilter === "warning") return (pmPct ?? 0) >= 80 && (pmPct ?? 0) < 100;
       return (pmPct ?? 0) < 80;
@@ -880,7 +894,7 @@ export default function PreventiveMaintenancePage() {
         row.tool.partNo.toLowerCase().includes(q)
       );
     });
-  }, [tableRows, deferredSearchFilter, thresholdFilter, pmPercentageByToolId]);
+  }, [tableRows, deferredSearchFilter, thresholdFilter, pmPercentageByToolNo]);
 
   const thresholdCounts = useMemo(() => {
     let safe = 0;
@@ -888,7 +902,7 @@ export default function PreventiveMaintenancePage() {
     let critical = 0;
 
     for (const row of tableRows) {
-      const pmPct = pmPercentageByToolId.get(row.tool.id) ?? 0;
+      const pmPct = pmPercentageByToolNo.get(row.tool.toolNo) ?? 0;
       if (pmPct >= 100) {
         critical += 1;
       } else if (pmPct >= 80) {
@@ -899,7 +913,7 @@ export default function PreventiveMaintenancePage() {
     }
 
     return { safe, warning, critical };
-  }, [tableRows, pmPercentageByToolId]);
+  }, [tableRows, pmPercentageByToolNo]);
 
   const handleConfigureTool = useCallback((tool: AllToolsResult) => {
     setAddInitialTool(tool);
@@ -1072,7 +1086,7 @@ export default function PreventiveMaintenancePage() {
                   PM Strokes
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
-                  Production Done
+                  Strokes Completed
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700 }}>
                   Next PM Stroke
@@ -1108,7 +1122,7 @@ export default function PreventiveMaintenancePage() {
       <AddToolDialog
         open={addOpen}
         onClose={handleCloseAddDialog}
-        existingToolIds={existingToolIds}
+        existingToolNos={existingToolNos}
         initialTool={addInitialTool}
       />
       <EditDialog

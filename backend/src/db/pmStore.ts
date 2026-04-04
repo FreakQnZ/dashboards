@@ -29,6 +29,43 @@ function formatDate(d: string | Date): string {
   return date.toISOString();
 }
 
+async function resolveToolNumber(toolId: number): Promise<string | null> {
+  const fromToolLife = await db
+    .selectFrom("tool_life")
+    .select("TL_tool_number as toolNo")
+    .where("TL_tool_id", "=", toolId)
+    .executeTakeFirst();
+
+  if (fromToolLife?.toolNo) {
+    return fromToolLife.toolNo;
+  }
+
+  const fromToolMaster = await db
+    .selectFrom("components_tool")
+    .select("CT_TOOLNO as toolNo")
+    .where("CT_ID", "=", toolId)
+    .executeTakeFirst();
+
+  return fromToolMaster?.toolNo ?? null;
+}
+
+async function getToolStrokesByToolNo(toolNo: string): Promise<number> {
+  const result = await sql<{ totalQty: number }>`
+    SELECT COALESCE(MAX(comp.componentStrokes), 0) AS totalQty
+    FROM (
+      SELECT
+        ct.CT_COMPID,
+        SUM(pd.PD_PRODQTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)) AS componentStrokes
+      FROM production_details pd
+      INNER JOIN components_tool ct ON ct.CT_ID = pd.PD_TOOLID
+      WHERE ct.CT_TOOLNO = ${toolNo}
+      GROUP BY ct.CT_COMPID
+    ) comp
+  `.execute(db);
+
+  return Number(result.rows[0]?.totalQty ?? 0);
+}
+
 // ── Public API ─────────────────────────────────────────────────────
 
 /** Get all tool_life rows with their maintenance history attached. */
@@ -84,8 +121,8 @@ export async function addEntry(
   // Check for existing row (PK will also enforce this but gives a nicer message)
   const existing = await db
     .selectFrom("tool_life")
-    .select("TL_tool_id")
-    .where("TL_tool_id", "=", toolId)
+    .select("TL_tool_number")
+    .where("TL_tool_number", "=", toolNo)
     .executeTakeFirst();
 
   if (existing) {
@@ -159,12 +196,12 @@ export async function updateEntry(
 
 /** Get total strokes for any tool from production_details (does NOT require tool_life entry). */
 export async function getToolStrokes(toolId: number): Promise<number> {
-  const result = await db
-    .selectFrom("production_details")
-    .select(sql<number>`COALESCE(SUM(PD_PRODQTY), 0)`.as("totalQty"))
-    .where("PD_TOOLID", "=", toolId)
-    .executeTakeFirst();
-  return Number(result?.totalQty ?? 0);
+  const toolNo = await resolveToolNumber(toolId);
+  if (!toolNo) {
+    return 0;
+  }
+
+  return getToolStrokesByToolNo(toolNo);
 }
 
 /** Get current total strokes and suggested next PM stroke for a given toolId. */
@@ -181,13 +218,7 @@ export async function getStrokeInfo(
     throw new Error(`Tool ID ${toolId} not found`);
   }
 
-  const strokeResult = await db
-    .selectFrom("production_details")
-    .select(sql<number>`COALESCE(SUM(PD_PRODQTY), 0)`.as("totalQty"))
-    .where("PD_TOOLID", "=", toolId)
-    .executeTakeFirst();
-
-  const currentStroke = Number(strokeResult?.totalQty ?? 0);
+  const currentStroke = await getToolStrokes(toolId);
   const suggestedNextStroke = currentStroke + Number(row.TL_preventive_maintenance_strokes);
 
   return { currentStroke, suggestedNextStroke };
@@ -210,13 +241,7 @@ export async function confirmMaintenance(
   }
 
   // Compute current total strokes from production_details
-  const strokeResult = await db
-    .selectFrom("production_details")
-    .select(sql<number>`COALESCE(SUM(PD_PRODQTY), 0)`.as("totalQty"))
-    .where("PD_TOOLID", "=", toolId)
-    .executeTakeFirst();
-
-  const currentStroke = Number(strokeResult?.totalQty ?? 0);
+  const currentStroke = await getToolStrokes(toolId);
 
   await db
     .insertInto("preventive_maintenance")

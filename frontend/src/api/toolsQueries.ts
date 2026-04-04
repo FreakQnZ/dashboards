@@ -9,6 +9,7 @@ export interface ToolMachine {
   machineCapacity: string;
   machineMake: string;
   scheduledQty: number;
+  scheduledStrokes: number;
 }
 
 export interface ToolWithMachines {
@@ -17,8 +18,10 @@ export interface ToolWithMachines {
   drawingNo: string;
   partNo: string;
   partName: string;
+  cavity: number;
   machineCount: number;
   totalScheduledQty: number;
+  totalScheduledStrokes: number;
   machines: ToolMachine[];
 }
 

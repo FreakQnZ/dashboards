@@ -71,22 +71,43 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
       COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes,
       COALESCE(pm_count.cnt, 0)         AS maintenanceCount
     FROM tool_life tl
-    INNER JOIN preventive_maintenance pm
-      ON pm.PM_id = (
-        SELECT MAX(pm2.PM_id)
-        FROM preventive_maintenance pm2
-        WHERE pm2.PM_tool_id = tl.TL_tool_id
-      )
+    INNER JOIN (
+      SELECT pm1.*
+      FROM preventive_maintenance pm1
+      INNER JOIN (
+        SELECT PM_tool_number, MAX(PM_id) AS maxId
+        FROM preventive_maintenance
+        GROUP BY PM_tool_number
+      ) latest_pm ON latest_pm.PM_tool_number = pm1.PM_tool_number
+        AND latest_pm.maxId = pm1.PM_id
+    ) pm ON pm.PM_tool_number = tl.TL_tool_number
     LEFT JOIN (
-      SELECT PD_TOOLID, SUM(PD_PRODQTY) AS totalStrokes
-      FROM production_details
-      GROUP BY PD_TOOLID
-    ) strokes ON strokes.PD_TOOLID = tl.TL_tool_id
+      SELECT
+        comp.toolNo,
+        MAX(comp.componentStrokes) AS totalStrokes
+      FROM (
+        SELECT
+          ct.CT_TOOLNO AS toolNo,
+          ct.CT_COMPID,
+          SUM(pd.PD_PRODQTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)) AS componentStrokes
+        FROM production_details pd
+        INNER JOIN components_tool ct ON ct.CT_ID = pd.PD_TOOLID
+        GROUP BY ct.CT_TOOLNO, ct.CT_COMPID
+      ) comp
+      GROUP BY comp.toolNo
+    ) strokes ON strokes.toolNo = tl.TL_tool_number
     LEFT JOIN (
-      SELECT PM_tool_id, COUNT(*) AS cnt
+      SELECT PM_tool_number, COUNT(*) AS cnt
       FROM preventive_maintenance
-      GROUP BY PM_tool_id
-    ) pm_count ON pm_count.PM_tool_id = tl.TL_tool_id
+      GROUP BY PM_tool_number
+    ) pm_count ON pm_count.PM_tool_number = tl.TL_tool_number
+    WHERE tl.TL_tool_id = (
+      SELECT tl2.TL_tool_id
+      FROM tool_life tl2
+      WHERE tl2.TL_tool_number = tl.TL_tool_number
+      ORDER BY tl2.TL_created_at DESC, tl2.TL_tool_id DESC
+      LIMIT 1
+    )
   `.execute(db);
 
   const results = [];
@@ -131,43 +152,65 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
     .selectFrom("components_tool")
     .innerJoin("components as c", "c.CO_ID", "components_tool.CT_COMPID")
     .select([
-      "components_tool.CT_ID as id",
+      sql<number>`MIN(components_tool.CT_ID)`.as("id"),
       "components_tool.CT_TOOLNO as toolNo",
-      "c.CO_PARTNO as partNo",
+      sql<string>`GROUP_CONCAT(DISTINCT c.CO_PARTNO ORDER BY c.CO_PARTNO SEPARATOR ', ')`.as("partNo"),
     ])
     .where("components_tool.CT_ACTIVEYN", "=", "Y")
+    .groupBy("components_tool.CT_TOOLNO")
     .orderBy("components_tool.CT_TOOLNO", "asc")
     .execute();
 
   const entries = await getEntries();
-  const entryByToolId = new Map(entries.map((entry) => [entry.toolId, entry]));
+  const entryByToolNo = new Map(entries.map((entry) => [entry.toolNo, entry]));
 
   const statusRows = await sql<{
-    toolId: number;
+    toolNo: string;
     pmCurrentStroke: number;
     nextStroke: number;
     totalLifetimeStrokes: number;
   }>`
     SELECT
-      tl.TL_tool_id AS toolId,
+      tl.TL_tool_number AS toolNo,
       pm.PM_current_stroke AS pmCurrentStroke,
       pm.PM_next_stroke AS nextStroke,
       COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes
     FROM tool_life tl
-    INNER JOIN preventive_maintenance pm
-      ON pm.PM_id = (
-        SELECT MAX(pm2.PM_id)
-        FROM preventive_maintenance pm2
-        WHERE pm2.PM_tool_id = tl.TL_tool_id
-      )
+    INNER JOIN (
+      SELECT pm1.*
+      FROM preventive_maintenance pm1
+      INNER JOIN (
+        SELECT PM_tool_number, MAX(PM_id) AS maxId
+        FROM preventive_maintenance
+        GROUP BY PM_tool_number
+      ) latest_pm ON latest_pm.PM_tool_number = pm1.PM_tool_number
+        AND latest_pm.maxId = pm1.PM_id
+    ) pm ON pm.PM_tool_number = tl.TL_tool_number
     LEFT JOIN (
-      SELECT PD_TOOLID, SUM(PD_PRODQTY) AS totalStrokes
-      FROM production_details
-      GROUP BY PD_TOOLID
-    ) strokes ON strokes.PD_TOOLID = tl.TL_tool_id
+      SELECT
+        comp.toolNo,
+        MAX(comp.componentStrokes) AS totalStrokes
+      FROM (
+        SELECT
+          ct.CT_TOOLNO AS toolNo,
+          ct.CT_COMPID,
+          SUM(pd.PD_PRODQTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)) AS componentStrokes
+        FROM production_details pd
+        INNER JOIN components_tool ct ON ct.CT_ID = pd.PD_TOOLID
+        GROUP BY ct.CT_TOOLNO, ct.CT_COMPID
+      ) comp
+      GROUP BY comp.toolNo
+    ) strokes ON strokes.toolNo = tl.TL_tool_number
+    WHERE tl.TL_tool_id = (
+      SELECT tl2.TL_tool_id
+      FROM tool_life tl2
+      WHERE tl2.TL_tool_number = tl.TL_tool_number
+      ORDER BY tl2.TL_created_at DESC, tl2.TL_tool_id DESC
+      LIMIT 1
+    )
   `.execute(db);
 
-  const statusByToolId = new Map(
+  const statusByToolNo = new Map(
     statusRows.rows.map((row) => {
       const pmCurrentStroke = Number(row.pmCurrentStroke);
       const nextStroke = Number(row.nextStroke);
@@ -179,7 +222,7 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
           : 0;
 
       return [
-        Number(row.toolId),
+        row.toolNo,
         {
           totalLifetimeStrokes,
           pmPercentage,
@@ -190,8 +233,8 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
 
   const exportRows = allTools
     .map((tool, index) => {
-      const entry = entryByToolId.get(Number(tool.id));
-      const status = statusByToolId.get(Number(tool.id));
+      const entry = entryByToolNo.get(tool.toolNo);
+      const status = statusByToolNo.get(tool.toolNo);
       const latestMaintenance =
         entry && entry.maintenanceHistory.length > 0
           ? entry.maintenanceHistory[entry.maintenanceHistory.length - 1]
@@ -244,7 +287,7 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
     { header: "Tool Life", key: "toolLife", width: 14 },
     { header: "SPM", key: "spm", width: 10 },
     { header: "PM Strokes", key: "pmStrokes", width: 14 },
-    { header: "Production Done", key: "productionDone", width: 18 },
+    { header: "Strokes Completed", key: "productionDone", width: 18 },
     { header: "Next PM Stroke", key: "nextPmStroke", width: 16 },
     { header: "Last Maintenance", key: "lastMaintenance", width: 18 },
     { header: "PM Count", key: "pmCount", width: 10 },
