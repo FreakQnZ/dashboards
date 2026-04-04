@@ -1,4 +1,5 @@
 import { Link as RouterLink } from "react-router-dom";
+import type { ReactNode } from "react";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import CardActionArea from "@mui/material/CardActionArea";
@@ -13,9 +14,16 @@ import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import { useAuth } from "../auth/AuthContext";
 import Button from "@mui/material/Button";
-import { hasAccess } from "../auth/permissions";
+import { hasAccess, type DashboardKey } from "../auth/permissions";
 
-const dashboards = [
+const dashboards: Array<{
+  title: string;
+  description: string;
+  path: string;
+  icon: ReactNode;
+  color: string;
+  accessKey: DashboardKey;
+}> = [
   {
     title: "Tools",
     description: "Tool scheduling, machine assignments, usage analytics & maintenance planning",
