@@ -44,3 +44,4 @@ coverage/
 # Misc
 *.local
 reports.json
+backend/data/reports.json
