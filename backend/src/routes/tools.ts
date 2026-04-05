@@ -137,11 +137,11 @@ async function getToolsForDate(
   };
 }
 
-// GET /count - total number of active tools in the database
+// GET /count - total number of distinct active tools in the database
 tools.get("/count", async (c) => {
   const result = await db
     .selectFrom("components_tool")
-    .select(sql<number>`COUNT(*)`.as("total"))
+    .select(sql<number>`COUNT(DISTINCT CT_TOOLNO)`.as("total"))
     .where("CT_ACTIVEYN", "=", "Y")
     .executeTakeFirst();
 

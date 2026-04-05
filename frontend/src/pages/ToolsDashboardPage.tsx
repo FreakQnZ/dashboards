@@ -597,7 +597,7 @@ export default function ToolsDashboardPage() {
                 variant="caption"
                 sx={{ fontSize: 11, fontWeight: 600, color: "text.secondary", textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1 }}
               >
-                Total Tools
+                Distinct Tools
               </Typography>
               <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
                 {totalTools}
