@@ -65,7 +65,19 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
       tl.TL_life_span        AS toolLife,
       tl.TL_spm              AS spm,
       tl.TL_preventive_maintenance_strokes AS pmStrokes,
-      pm.PM_current_stroke   AS pmCurrentStroke,
+      COALESCE((
+        SELECT MAX(comp.componentStrokes)
+        FROM (
+          SELECT
+            ct.CT_COMPID,
+            SUM(pd.PD_PRODQTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)) AS componentStrokes
+          FROM production_details pd
+          INNER JOIN components_tool ct ON ct.CT_ID = pd.PD_TOOLID
+          WHERE ct.CT_TOOLNO = tl.TL_tool_number
+            AND pd.PD_DATE <= pm.PM_date
+          GROUP BY ct.CT_COMPID
+        ) comp
+      ), 0)                 AS pmCurrentStroke,
       pm.PM_next_stroke      AS nextStroke,
       pm.PM_date             AS lastMaintenanceDate,
       COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes,
@@ -113,13 +125,14 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
   const results = [];
 
   for (const row of rows.rows) {
-    const pmCurrentStroke = Number(row.pmCurrentStroke);
+    const pmStrokes = Number(row.pmStrokes);
     const nextStroke = Number(row.nextStroke);
     const totalLifetimeStrokes = Number(row.totalLifetimeStrokes);
-    const range = nextStroke - pmCurrentStroke;
+    const cycleStartStroke = nextStroke - pmStrokes;
+    const completedInCurrentCycle = totalLifetimeStrokes - cycleStartStroke;
     const pmPercentage =
-      range > 0
-        ? Math.round(((totalLifetimeStrokes - pmCurrentStroke) / range) * 100)
+      pmStrokes > 0
+        ? Math.max(0, Math.round((completedInCurrentCycle / pmStrokes) * 100))
         : 0;
     if (pmPercentage >= threshold) {
       results.push({
@@ -127,8 +140,8 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
         toolNo: row.toolNo,
         toolLife: Number(row.toolLife),
         spm: Number(row.spm),
-        pmStrokes: Number(row.pmStrokes),
-        pmCurrentStroke,
+        pmStrokes,
+        pmCurrentStroke: cycleStartStroke,
         nextStroke,
         totalLifetimeStrokes,
         pmPercentage,
@@ -166,13 +179,27 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
 
   const statusRows = await sql<{
     toolNo: string;
+    pmStrokes: number;
     pmCurrentStroke: number;
     nextStroke: number;
     totalLifetimeStrokes: number;
   }>`
     SELECT
       tl.TL_tool_number AS toolNo,
-      pm.PM_current_stroke AS pmCurrentStroke,
+      tl.TL_preventive_maintenance_strokes AS pmStrokes,
+      COALESCE((
+        SELECT MAX(comp.componentStrokes)
+        FROM (
+          SELECT
+            ct.CT_COMPID,
+            SUM(pd.PD_PRODQTY / GREATEST(COALESCE(ct.CT_NO_OF_CAVITY, 1), 1)) AS componentStrokes
+          FROM production_details pd
+          INNER JOIN components_tool ct ON ct.CT_ID = pd.PD_TOOLID
+          WHERE ct.CT_TOOLNO = tl.TL_tool_number
+            AND pd.PD_DATE <= pm.PM_date
+          GROUP BY ct.CT_COMPID
+        ) comp
+      ), 0) AS pmCurrentStroke,
       pm.PM_next_stroke AS nextStroke,
       COALESCE(strokes.totalStrokes, 0) AS totalLifetimeStrokes
     FROM tool_life tl
@@ -212,13 +239,14 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
 
   const statusByToolNo = new Map(
     statusRows.rows.map((row) => {
-      const pmCurrentStroke = Number(row.pmCurrentStroke);
+      const pmStrokes = Number(row.pmStrokes);
       const nextStroke = Number(row.nextStroke);
       const totalLifetimeStrokes = Number(row.totalLifetimeStrokes);
-      const range = nextStroke - pmCurrentStroke;
+      const cycleStartStroke = nextStroke - pmStrokes;
+      const completedInCurrentCycle = totalLifetimeStrokes - cycleStartStroke;
       const pmPercentage =
-        range > 0
-          ? Math.round(((totalLifetimeStrokes - pmCurrentStroke) / range) * 100)
+        pmStrokes > 0
+          ? Math.max(0, Math.round((completedInCurrentCycle / pmStrokes) * 100))
           : 0;
 
       return [

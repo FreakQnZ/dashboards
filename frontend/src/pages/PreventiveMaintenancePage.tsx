@@ -703,6 +703,7 @@ function MaintenanceHistoryDialog({
 type ToolRow = {
   tool: AllToolsResult;
   entry: (PMEntry & { totalLifetimeStrokes: number }) | null;
+  pmPercentage: number;
 };
 
 type ThresholdFilter = "all" | "safe" | "warning" | "critical";
@@ -734,7 +735,7 @@ const PMTableRowView = memo(function PMTableRowView({
 
   return (
     <TableRow hover>
-      <TableCell align="right" sx={{ fontWeight: 600 }}>{index + 1}</TableCell>
+      <TableCell align="left" sx={{ fontWeight: 600, pr: 1.5 }}>{index + 1}</TableCell>
       <TableCell sx={{ fontWeight: 600 }}>{tool.toolNo}</TableCell>
       <TableCell>{tool.partNo || "-"}</TableCell>
       <TableCell align="right">{entry ? formatIndianNumber(entry.toolLife) : "-"}</TableCell>
@@ -756,9 +757,10 @@ const PMTableRowView = memo(function PMTableRowView({
           : "-"}
       </TableCell>
       <TableCell align="right">{entry ? entry.maintenanceHistory.length : "-"}</TableCell>
+      <TableCell align="right">{entry ? `${row.pmPercentage}%` : "-"}</TableCell>
       <TableCell>
         {entry ? (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, flexWrap: "wrap" }}>
             <Tooltip title="Edit tool settings">
               <span>
                 <IconButton size="small" onClick={() => onEdit(entry)} disabled={!canEdit}>
@@ -865,6 +867,7 @@ export default function PreventiveMaintenancePage() {
   const tableRows = useMemo<ToolRow[]>(() => {
     return allTools.map((tool) => ({
       tool,
+      pmPercentage: pmPercentageByToolNo.get(tool.toolNo) ?? 0,
       entry: (() => {
         const entry = entryByToolNo.get(tool.toolNo);
         if (!entry) return null;
@@ -874,12 +877,12 @@ export default function PreventiveMaintenancePage() {
         };
       })(),
     }));
-  }, [allTools, entryByToolNo, totalLifetimeStrokesByToolNo]);
+  }, [allTools, entryByToolNo, totalLifetimeStrokesByToolNo, pmPercentageByToolNo]);
 
   const filteredRows = useMemo(() => {
     const matchesThreshold = (row: ToolRow) => {
       if (thresholdFilter === "all") return true;
-      const pmPct = pmPercentageByToolNo.get(row.tool.toolNo);
+      const pmPct = row.pmPercentage;
       if (thresholdFilter === "critical") return (pmPct ?? 0) >= 100;
       if (thresholdFilter === "warning") return (pmPct ?? 0) >= 80 && (pmPct ?? 0) < 100;
       return (pmPct ?? 0) < 80;
@@ -894,7 +897,7 @@ export default function PreventiveMaintenancePage() {
         row.tool.partNo.toLowerCase().includes(q)
       );
     });
-  }, [tableRows, deferredSearchFilter, thresholdFilter, pmPercentageByToolNo]);
+  }, [tableRows, deferredSearchFilter, thresholdFilter]);
 
   const thresholdCounts = useMemo(() => {
     let safe = 0;
@@ -902,7 +905,7 @@ export default function PreventiveMaintenancePage() {
     let critical = 0;
 
     for (const row of tableRows) {
-      const pmPct = pmPercentageByToolNo.get(row.tool.toolNo) ?? 0;
+      const pmPct = row.pmPercentage ?? 0;
       if (pmPct >= 100) {
         critical += 1;
       } else if (pmPct >= 80) {
@@ -913,7 +916,7 @@ export default function PreventiveMaintenancePage() {
     }
 
     return { safe, warning, critical };
-  }, [tableRows, pmPercentageByToolNo]);
+  }, [tableRows]);
 
   const handleConfigureTool = useCallback((tool: AllToolsResult) => {
     setAddInitialTool(tool);
@@ -1068,34 +1071,50 @@ export default function PreventiveMaintenancePage() {
           <TableContainer
             component={Paper}
             variant="outlined"
-            sx={{ height: "100%" }}
+            sx={{
+              height: "100%",
+              "& .MuiTableCell-root": {
+                px: 0.5,
+                py: 0.5,
+                whiteSpace: "normal",
+                overflowWrap: "anywhere",
+                wordBreak: "break-word",
+                lineHeight: 1.2,
+              },
+              "& .MuiIconButton-root": {
+                p: 0.25,
+              },
+            }}
           >
-            <Table size="small" stickyHeader>
+            <Table size="small" stickyHeader sx={{ tableLayout: "fixed", width: "100%" }}>
             <TableHead>
               <TableRow>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>Sl No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Tool No</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Part No</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align="left" sx={{ fontWeight: 700, width: 40, pr: 1.5 }}>Sl No</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 92 }}>Tool No</TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 110 }}>Part No</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 78 }}>
                   Tool Life
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 58 }}>
                   SPM
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 82 }}>
                   PM Strokes
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 92 }}>
                   Strokes Completed
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 84 }}>
                   Next PM Stroke
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Last Maintenance</TableCell>
-                <TableCell align="right" sx={{ fontWeight: 700 }}>
+                <TableCell sx={{ fontWeight: 700, width: 84 }}>Last Maintenance</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 60 }}>
                   PM Count
                 </TableCell>
-                <TableCell sx={{ fontWeight: 700, minWidth: 280 }}>Actions</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 700, width: 54 }}>
+                  PM %
+                </TableCell>
+                <TableCell sx={{ fontWeight: 700, width: 118 }}>Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>

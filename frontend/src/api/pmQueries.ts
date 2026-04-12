@@ -87,6 +87,8 @@ export function useAddPMEntry() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-entries"] });
+      qc.invalidateQueries({ queryKey: ["pm-status"] });
+      qc.invalidateQueries({ queryKey: ["pm-status-all"] });
     },
   });
 }
@@ -105,6 +107,8 @@ export function useUpdatePMEntry() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-entries"] });
+      qc.invalidateQueries({ queryKey: ["pm-status"] });
+      qc.invalidateQueries({ queryKey: ["pm-status-all"] });
     },
   });
 }
@@ -166,6 +170,8 @@ export function useConfirmMaintenance() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-entries"] });
+      qc.invalidateQueries({ queryKey: ["pm-status"] });
+      qc.invalidateQueries({ queryKey: ["pm-status-all"] });
     },
   });
 }
@@ -179,6 +185,8 @@ export function useDeletePMEntry() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["pm-entries"] });
+      qc.invalidateQueries({ queryKey: ["pm-status"] });
+      qc.invalidateQueries({ queryKey: ["pm-status-all"] });
     },
   });
 }
