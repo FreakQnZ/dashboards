@@ -548,7 +548,7 @@ export default function RMCorrectionPage() {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ width: "12%" }}>Raw Material</TableCell>
-                  <TableCell sx={{ width: "9%" }}>batch</TableCell>
+                  <TableCell sx={{ width: "9%" }}>Batch</TableCell>
                   <TableCell align="right" sx={{ width: "9%" }}>
                     Total Inwarded
                   </TableCell>
@@ -556,7 +556,7 @@ export default function RMCorrectionPage() {
                     RM Given
                   </TableCell>
                   <TableCell align="right" sx={{ width: "8%" }}>
-                    RM Remaining
+                    Theo RM Remaining
                   </TableCell>
                   <TableCell align="right" sx={{ width: "7%" }}>
                     Scrap
