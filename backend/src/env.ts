@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { config } from "dotenv";
+
+// Ensure local .env values override inherited shell variables.
+config({ override: true });
 
 const envSchema = z.object({
   DB_HOST: z.string().default("localhost"),

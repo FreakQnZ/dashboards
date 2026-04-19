@@ -120,6 +120,12 @@ pm.get("/status", requireAnyAccess(["preventive_maintenance", "life_report"]), a
       ORDER BY tl2.TL_created_at DESC, tl2.TL_tool_id DESC
       LIMIT 1
     )
+      AND EXISTS (
+        SELECT 1
+        FROM components_tool ct_active
+        WHERE ct_active.CT_TOOLNO = tl.TL_tool_number
+          AND ct_active.CT_ACTIVEYN = 'Y'
+      )
   `.execute(db);
 
   const results = [];
@@ -235,6 +241,12 @@ pm.get("/export", requireAnyAccess(["preventive_maintenance", "life_report"]), a
       ORDER BY tl2.TL_created_at DESC, tl2.TL_tool_id DESC
       LIMIT 1
     )
+      AND EXISTS (
+        SELECT 1
+        FROM components_tool ct_active
+        WHERE ct_active.CT_TOOLNO = tl.TL_tool_number
+          AND ct_active.CT_ACTIVEYN = 'Y'
+      )
   `.execute(db);
 
   const statusByToolNo = new Map(

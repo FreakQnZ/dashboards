@@ -534,13 +534,24 @@ export default function ToolsDashboardPage() {
     return map;
   }, [pmAll]);
 
-  // Compute life-span bands
+  // Compute life-span bands using distinct tools only.
   const totalTools = toolsCountData?.total ?? 0;
-  const warningTools = pmAll.filter((t) => {
+  const distinctPmAll = useMemo(() => {
+    const uniqueByToolId = new Map<number, PMStatusEntry>();
+    for (const entry of pmAll) {
+      if (!uniqueByToolId.has(entry.toolId)) {
+        uniqueByToolId.set(entry.toolId, entry);
+      }
+    }
+    return Array.from(uniqueByToolId.values());
+  }, [pmAll]);
+
+  const allLifeTools = distinctPmAll.length;
+  const warningTools = distinctPmAll.filter((t) => {
     const lifePct = t.toolLife > 0 ? (t.totalLifetimeStrokes / t.toolLife) * 100 : 0;
     return lifePct >= 50 && lifePct < 80;
   }).length;
-  const criticalTools = pmAll.filter((t) => {
+  const criticalTools = distinctPmAll.filter((t) => {
     const lifePct = t.toolLife > 0 ? (t.totalLifetimeStrokes / t.toolLife) * 100 : 0;
     return lifePct >= 80;
   }).length;
@@ -632,7 +643,7 @@ export default function ToolsDashboardPage() {
                 All Life
               </Typography>
               <Typography variant="h6" fontWeight={700} lineHeight={1.2} color="#00897b">
-                {pmAll.length}
+                {allLifeTools}
               </Typography>
             </Box>
           </Box>
