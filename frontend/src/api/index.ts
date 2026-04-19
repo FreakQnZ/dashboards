@@ -48,6 +48,16 @@ export type {
   RMVarianceResponse,
 } from "./rmVarianceQueries";
 export {
+  useRMCorrectionEntries,
+  useRMCorrectionBatchDetails,
+} from "./rmCorrectionQueries";
+export type {
+  RMCorrectionEntry,
+  RMCorrectionResponse,
+  RMCorrectionBatchDetailEntry,
+  RMCorrectionBatchDetailResponse,
+} from "./rmCorrectionQueries";
+export {
   useReportGroups,
   useReports,
   useReportById,

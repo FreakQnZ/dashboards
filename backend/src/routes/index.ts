@@ -4,6 +4,7 @@ export { default as pmRoutes } from "./pm";
 export { default as scheduleRoutes } from "./schedule";
 export { default as productionRoutes } from "./production";
 export { default as rmVarianceRoutes } from "./rmVariance";
+export { default as rmCorrectionRoutes } from "./rmCorrection";
 export { default as reportsRoutes } from "./reports";
 export { default as authRoutes } from "./auth";
 export { default as adminRoutes } from "./admin";

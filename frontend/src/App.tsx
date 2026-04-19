@@ -15,6 +15,7 @@ import {
   LifeReportPage,
   ProductionDashboardPage,
   RMVariancePage,
+  RMCorrectionPage,
   ReportsPage,
   RunReportPage,
   LoginPage,
@@ -105,6 +106,16 @@ export default function App() {
                   <ProtectedRoute requiredAccess="reports">
                     <DashboardLayout>
                       <ReportsPage />
+                    </DashboardLayout>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/rm-correction"
+                element={
+                  <ProtectedRoute>
+                    <DashboardLayout>
+                      <RMCorrectionPage />
                     </DashboardLayout>
                   </ProtectedRoute>
                 }

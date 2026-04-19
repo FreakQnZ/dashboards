@@ -10,6 +10,7 @@ import BuildIcon from "@mui/icons-material/Build";
 import HandymanIcon from "@mui/icons-material/Handyman";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
+import EditNoteIcon from "@mui/icons-material/EditNote";
 import { useAuth } from "../auth/AuthContext";
 import Button from "@mui/material/Button";
 import { hasAccess, type DashboardKey } from "../auth/permissions";
@@ -20,7 +21,7 @@ const dashboards: Array<{
   path: string;
   icon: ReactNode;
   color: string;
-  accessKey: DashboardKey;
+  accessKey?: DashboardKey;
 }> = [
   {
     title: "Tools",
@@ -54,6 +55,13 @@ const dashboards: Array<{
     color: "#455a64",
     accessKey: "reports",
   },
+  {
+    title: "RM Correction",
+    description: "Adjust raw material stock entries and apply manual correction updates",
+    path: "/rm-correction",
+    icon: <EditNoteIcon sx={{ fontSize: 48 }} />,
+    color: "#5d4037",
+  },
 ];
 
 export default function LandingPage() {
@@ -77,7 +85,7 @@ export default function LandingPage() {
 
       <Grid container spacing={3}>
         {dashboards.map((d) => {
-          const enabled = hasAccess(permissions, d.accessKey);
+          const enabled = d.accessKey ? hasAccess(permissions, d.accessKey) : true;
           return (
           <Grid key={d.path} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
             <Card

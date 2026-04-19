@@ -8,6 +8,7 @@ import {
   scheduleRoutes,
   productionRoutes,
   rmVarianceRoutes,
+  rmCorrectionRoutes,
   reportsRoutes,
   authRoutes,
   adminRoutes,
@@ -32,6 +33,7 @@ app.route("/api/pm", pmRoutes);
 app.route("/schedule", scheduleRoutes);
 app.route("/api/production", productionRoutes);
 app.route("/api/rm-variance", rmVarianceRoutes);
+app.route("/api/rm-correction", rmCorrectionRoutes);
 app.route("/api/reports", reportsRoutes);
 
 // ================= FRONTEND STATIC =================
