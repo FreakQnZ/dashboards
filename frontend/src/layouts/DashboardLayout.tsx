@@ -15,8 +15,6 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import BuildIcon from "@mui/icons-material/Build";
 import HandymanIcon from "@mui/icons-material/Handyman";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import FactoryIcon from "@mui/icons-material/Factory";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -38,8 +36,6 @@ const navItems: NavItem[] = [
   { label: "Tools", icon: <BuildIcon />, path: "/dashboards/tools", accessKey: "tools" },
   { label: "Preventive Maintenance", icon: <HandymanIcon />, path: "/preventive-maintenance", accessKey: "preventive_maintenance" },
   { label: "Life Report", icon: <AssessmentIcon />, path: "/life-report", accessKey: "life_report" },
-  { label: "Production", icon: <FactoryIcon />, path: "/production", accessKey: "production" },
-  { label: "RM Variance", icon: <CompareArrowsIcon />, path: "/rm-variance", accessKey: "rm_variance" },
   { label: "Reports", icon: <QueryStatsIcon />, path: "/reports", accessKey: "reports" },
   { label: "RBAC Admin", icon: <DashboardIcon />, path: "/admin/rbac", adminOnly: true },
 ];

@@ -9,8 +9,6 @@ import Box from "@mui/material/Box";
 import BuildIcon from "@mui/icons-material/Build";
 import HandymanIcon from "@mui/icons-material/Handyman";
 import AssessmentIcon from "@mui/icons-material/Assessment";
-import FactoryIcon from "@mui/icons-material/Factory";
-import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
 import QueryStatsIcon from "@mui/icons-material/QueryStats";
 import { useAuth } from "../auth/AuthContext";
 import Button from "@mui/material/Button";
@@ -47,22 +45,6 @@ const dashboards: Array<{
     icon: <AssessmentIcon sx={{ fontSize: 48 }} />,
     color: "#1976d2",
     accessKey: "life_report",
-  },
-  {
-    title: "Production",
-    description: "Daily production tracking, schedule variance & raw material analysis",
-    path: "/production",
-    icon: <FactoryIcon sx={{ fontSize: 48 }} />,
-    color: "#7b1fa2",
-    accessKey: "production",
-  },
-  {
-    title: "RM Variance",
-    description: "Raw material variance analysis — scheduled vs actual consumption by plant",
-    path: "/rm-variance",
-    icon: <CompareArrowsIcon sx={{ fontSize: 48 }} />,
-    color: "#e65100",
-    accessKey: "rm_variance",
   },
   {
     title: "Reports",
