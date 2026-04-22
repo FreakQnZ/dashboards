@@ -191,6 +191,46 @@ export function useDeletePMEntry() {
   });
 }
 
+export async function downloadPMAttachment(attachment: string): Promise<void> {
+  const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+  const token = getAuthToken();
+  const isAbsolutePath = attachment.startsWith("http://") || attachment.startsWith("https://") || attachment.startsWith("/");
+  const url = isAbsolutePath
+    ? `${API_BASE}${attachment}`
+    : `${API_BASE}/api/pm/attachment/${encodeURIComponent(attachment)}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("auth:logout"));
+    }
+  }
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || `Download failed: ${res.status}`);
+  }
+
+  const blob = await res.blob();
+  const contentDisposition = res.headers.get("content-disposition") ?? "";
+  const match = contentDisposition.match(/filename="?([^";]+)"?/i);
+  const fallbackName = attachment.split("/").pop() || "pm-attachment";
+  const fileName = match?.[1] ?? fallbackName;
+
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(objectUrl);
+}
+
 // ── PM Status (tools reaching ≥80% threshold) ─────────────────────
 
 export interface PMStatusEntry {
