@@ -39,7 +39,6 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Tooltip from "@mui/material/Tooltip";
-import Link from "@mui/material/Link";
 import {
   useToolSearch,
   useAllTools,
@@ -52,6 +51,7 @@ import {
   useDeletePMEntry,
   useStrokeInfo,
   useExportPM,
+  downloadPMAttachment,
 } from "../api";
 import type { ToolSearchResult, PMEntry, AllToolsResult } from "../api";
 import { formatIndianNumber } from "../utils";
@@ -624,18 +624,34 @@ function MaintenanceHistoryDialog({
   onClose: () => void;
   entry: PMEntry | null;
 }) {
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const handleDownload = async (recordId: number, attachment: string) => {
+    try {
+      setDownloadError(null);
+      setDownloadingId(recordId);
+      await downloadPMAttachment(attachment);
+    } catch (err: any) {
+      setDownloadError(err?.message ?? "Failed to download attachment");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      TransitionProps={{ timeout: 0 }}
-    >
-      <DialogTitle>
-        Maintenance History - {entry?.toolNo}
-      </DialogTitle>
-      <DialogContent>
+    <>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="md"
+        fullWidth
+        TransitionProps={{ timeout: 0 }}
+      >
+        <DialogTitle>
+          Maintenance History - {entry?.toolNo}
+        </DialogTitle>
+        <DialogContent>
         {entry?.maintenanceHistory && entry.maintenanceHistory.length > 0 ? (
           <TableContainer component={Paper} sx={{ mt: 2 }} variant="outlined">
             <Table size="small">
@@ -665,13 +681,22 @@ function MaintenanceHistoryDialog({
                     <TableCell align="right">{formatIndianNumber(record.nextStroke)}</TableCell>
                     <TableCell>
                       {record.attachment ? (
-                        <Link
-                          href={record.attachment}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={
+                            downloadingId === record.id ? (
+                              <CircularProgress size={14} />
+                            ) : (
+                              <DownloadIcon fontSize="small" />
+                            )
+                          }
+                          disabled={downloadingId === record.id}
+                          onClick={() => handleDownload(record.id, record.attachment!)}
+                          sx={{ textTransform: "none" }}
                         >
-                          View
-                        </Link>
+                          Download
+                        </Button>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           —
@@ -690,11 +715,21 @@ function MaintenanceHistoryDialog({
             </Typography>
           </Box>
         )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>Close</Button>
+        </DialogActions>
+      </Dialog>
+      <Snackbar
+        open={!!downloadError}
+        autoHideDuration={4000}
+        onClose={() => setDownloadError(null)}
+      >
+        <Alert severity="error" onClose={() => setDownloadError(null)}>
+          {downloadError}
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 

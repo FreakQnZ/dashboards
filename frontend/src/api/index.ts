@@ -25,6 +25,7 @@ export {
   usePMStatusAll,
   useStrokeInfo,
   useExportPM,
+  downloadPMAttachment,
 } from "./pmQueries";
 export type {
   ToolSearchResult,
