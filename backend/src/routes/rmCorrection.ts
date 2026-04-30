@@ -1,8 +1,116 @@
 import { Hono } from "hono";
 import { sql } from "kysely";
 import { db } from "../db";
+import { getAuth } from "../middleware/auth";
 
 const rmCorrection = new Hono();
+
+rmCorrection.post("/submit", async (c) => {
+  type CorrectionItem = {
+    batch: string;
+    rmid: number;
+    theoRmRemaining?: number;
+    actualRm?: number;
+    rmRemarks?: string;
+    scrapBefore?: number;
+    actualScrap?: number;
+    scrapRemarks?: string;
+  };
+
+  const auth = getAuth(c);
+  const body = await c.req.json().catch(() => null) as { items?: CorrectionItem[] } | null;
+  const rawItems = body?.items ?? [];
+  const items = rawItems.filter((item) => {
+    const actualRm = Number(item?.actualRm);
+    const actualScrap = Number(item?.actualScrap);
+    return Number.isFinite(actualRm) || Number.isFinite(actualScrap);
+  });
+
+  if (!Array.isArray(rawItems) || items.length === 0) {
+    return c.json({ error: "No rows with Actual RM or Actual Scrap provided" }, 400);
+  }
+
+  try {
+    let insertedRm = 0;
+    let insertedScrap = 0;
+    for (const item of items) {
+      const batch = (item.batch ?? "").trim();
+      const rmid = Number(item.rmid);
+      const actualRm = Number(item.actualRm);
+      const actualScrap = Number(item.actualScrap);
+      const hasRm = Number.isFinite(actualRm);
+      const hasScrap = Number.isFinite(actualScrap);
+
+      if (!batch || !Number.isFinite(rmid)) {
+        return c.json({ error: "Invalid correction payload" }, 400);
+      }
+
+      if (batch.length > 45) {
+        return c.json({ error: "Batch value exceeds 45 characters" }, 400);
+      }
+
+      if (hasRm) {
+        const remarks = (item.rmRemarks ?? "").trim();
+        const theoRmRemaining = Number(item.theoRmRemaining);
+
+        if (!remarks || !Number.isFinite(theoRmRemaining)) {
+          return c.json({ error: "Invalid RM correction payload" }, 400);
+        }
+
+        if (remarks.length > 50) {
+          return c.json({ error: "RM Remarks cannot exceed 50 characters" }, 400);
+        }
+
+        const correction = Number((theoRmRemaining - actualRm).toFixed(2));
+
+        await sql`
+          INSERT INTO rm_prodcorrection
+            (rc_batchno, rc_rmid, rc_theo, rc_correction, rc_remarks, rc_createddt, rc_userid)
+          VALUES
+            (${batch}, ${rmid}, ${theoRmRemaining}, ${correction}, ${remarks}, NOW(), ${auth.userId})
+        `.execute(db);
+
+        insertedRm += 1;
+      }
+
+      if (hasScrap) {
+        const scrapBefore = Number(item.scrapBefore);
+        const scrapRemarks = (item.scrapRemarks ?? "").trim();
+
+        if (!Number.isFinite(scrapBefore) || !scrapRemarks) {
+          return c.json({ error: "Invalid Scrap correction payload" }, 400);
+        }
+
+        if (scrapRemarks.length > 50) {
+          return c.json({ error: "Scrap Remarks cannot exceed 50 characters" }, 400);
+        }
+
+        const scrapCorrection = Number((scrapBefore - actualScrap).toFixed(2));
+
+        await sql`
+          INSERT INTO rm_scrapcorrection
+            (rc_batchno, rc_rmid, rc_QtyBefore, rc_correction, rc_remarks, rc_createddt, rc_userid, rc_movementtype)
+          VALUES
+            (${batch}, ${rmid}, ${scrapBefore}, ${scrapCorrection}, ${scrapRemarks}, NOW(), ${auth.userId}, 'P')
+        `.execute(db);
+
+        insertedScrap += 1;
+      }
+    }
+
+    return c.json({ inserted: insertedRm + insertedScrap, insertedRm, insertedScrap });
+  } catch (err: any) {
+    console.error("RM Correction submit error:", err);
+    return c.json(
+      {
+        message: "Database insert failed",
+        error: "Database insert failed",
+        details: err?.message ?? String(err),
+      },
+      500
+    );
+  }
+});
 
 rmCorrection.get("/batch/:batch", async (c) => {
   const batch = (c.req.param("batch") ?? "").trim();
@@ -79,6 +187,82 @@ rmCorrection.get("/batch/:batch", async (c) => {
   }
 });
 
+rmCorrection.get("/history/:batch/:rmid", async (c) => {
+  const batch = (c.req.param("batch") ?? "").trim();
+  const rmid = Number(c.req.param("rmid"));
+
+  if (!batch || !Number.isFinite(rmid)) {
+    return c.json({ error: "Valid batch and RM id are required" }, 400);
+  }
+
+  try {
+    const rows = await sql<{
+      type: "RM" | "SCRAP";
+      qtyBefore: number;
+      correction: number;
+      remarks: string | null;
+      createdAt: string;
+      userLogin: string | null;
+      sortAt: string;
+    }>`
+      SELECT
+        historyRows.type,
+        historyRows.qtyBefore,
+        historyRows.correction,
+        historyRows.remarks,
+        DATE_FORMAT(historyRows.sortAt, '%d-%m-%Y %H:%i:%s') AS createdAt,
+        historyRows.userLogin,
+        historyRows.sortAt
+      FROM (
+        SELECT
+          'RM' AS type,
+          COALESCE(p.rc_theo, 0) AS qtyBefore,
+          COALESCE(p.rc_correction, 0) AS correction,
+          p.rc_remarks AS remarks,
+          p.rc_createddt AS sortAt,
+          u.US_login AS userLogin
+        FROM rm_prodcorrection p
+        LEFT JOIN users u ON u.US_id = p.rc_userid
+        WHERE TRIM(p.rc_batchno) = TRIM(${batch})
+          AND p.rc_rmid = ${rmid}
+
+        UNION ALL
+
+        SELECT
+          'SCRAP' AS type,
+          COALESCE(s.rc_QtyBefore, 0) AS qtyBefore,
+          COALESCE(s.rc_correction, 0) AS correction,
+          s.rc_remarks AS remarks,
+          s.rc_createddt AS sortAt,
+          u.US_login AS userLogin
+        FROM rm_scrapcorrection s
+        LEFT JOIN users u ON u.US_id = s.rc_userid
+        WHERE TRIM(s.rc_batchno) = TRIM(${batch})
+          AND s.rc_rmid = ${rmid}
+          AND UPPER(COALESCE(s.rc_movementtype, 'P')) = 'P'
+      ) historyRows
+      ORDER BY historyRows.sortAt DESC
+    `.execute(db);
+
+    const entries = rows.rows.map((r) => ({
+      type: r.type,
+      qtyBefore: Number(r.qtyBefore),
+      correction: Number(r.correction),
+      remarks: r.remarks ?? "",
+      createdAt: r.createdAt,
+      userLogin: r.userLogin ?? "",
+    }));
+
+    return c.json({ count: entries.length, entries });
+  } catch (err: any) {
+    console.error("RM Correction history query error:", err);
+    return c.json(
+      { error: "Database query failed", details: err?.message ?? String(err) },
+      500
+    );
+  }
+});
+
 /**
  * GET /api/rm-correction
  *
@@ -93,6 +277,7 @@ rmCorrection.get("/", async (c) => {
     const rows = await sql<{
       "Raw Material": string | null;
       batch: string;
+      rmid: number;
       "Total Inwarded": number;
       "RM Given": number;
       "RM Remaining": number;
@@ -100,11 +285,21 @@ rmCorrection.get("/", async (c) => {
     }>`
       SELECT
         COALESCE(prodQ.MM_RawMtPartNo, '') AS \`Raw Material\`,
-        prodRM.batch AS batch,
+        TRIM(prodRM.batch) AS batch,
+        prodRM.rd_rmid AS rmid,
         ROUND(COALESCE(inwardTotals.totalInwarded, 0), 2) AS \`Total Inwarded\`,
-        ROUND(COALESCE(prodRM.RMGiven, 0), 2) AS \`RM Given\`,
-        ROUND(COALESCE((prodRM.RMGiven - prodQ.ThRMForProduction), 0), 2) AS \`RM Remaining\`,
-        ROUND(COALESCE(prodQ.pdscrap, 0), 2) AS Scrap
+        ROUND(COALESCE(prodRM.ProdQty, 0), 2) AS \`RM Given\`,
+
+        ROUND(
+          COALESCE((prodRM.ProdQty - prodQ.ThRMForProduction), 0) -
+          COALESCE(corrections.totalCorrection, 0),
+          2
+        ) AS \`RM Remaining\`,
+
+        ROUND(
+          COALESCE(prodQ.pdscrap, 0) - COALESCE(scrapCorrections.totalScrapCorrection, 0),
+          2
+        ) AS Scrap
       FROM (
         SELECT
           RD_BATCHNO AS batch,
@@ -113,7 +308,7 @@ rmCorrection.get("/", async (c) => {
             SUM(CASE WHEN ri_movement = 'O' THEN rd_qty ELSE 0 END) -
             SUM(CASE WHEN ri_movement = 'I' THEN rd_acceptedqty ELSE 0 END),
             2
-          ) AS RMGiven
+          ) AS ProdQty
         FROM rm_inwarddetails
         JOIN rm_inwardmaster ON rd_riid = ri_id
         WHERE RI_MOVEMENTTYPE = 3
@@ -122,8 +317,8 @@ rmCorrection.get("/", async (c) => {
       JOIN (
         SELECT DISTINCT PD_BATCHNO AS batch
         FROM production_details
-        WHERE PD_DATE >= COALESCE(${startDate}, DATE_SUB(CURDATE(), INTERVAL 10 DAY))
-          AND PD_DATE <= CURDATE()
+        WHERE DATE(PD_DATE)  >= COALESCE(${startDate}, DATE_SUB(CURDATE(), INTERVAL 10 DAY))
+          AND DATE(PD_DATE)  <= CURDATE()
       ) recentBatches ON recentBatches.batch = prodRM.batch
       LEFT JOIN (
         SELECT
@@ -136,10 +331,27 @@ rmCorrection.get("/", async (c) => {
       ) inwardTotals ON inwardTotals.batch = prodRM.batch AND inwardTotals.rd_rmid = prodRM.rd_rmid
       LEFT JOIN (
         SELECT
+          TRIM(rc_batchno) AS rc_batchno,
+          rc_rmid,
+          ROUND(SUM(COALESCE(rc_correction, 0)), 2) AS totalCorrection
+        FROM rm_prodcorrection
+        GROUP BY rc_batchno, rc_rmid
+      ) corrections ON corrections.rc_batchno = TRIM(prodRM.batch) AND corrections.rc_rmid = prodRM.rd_rmid
+      LEFT JOIN (
+        SELECT
+          TRIM(rc_batchno) AS rc_batchno,
+          rc_rmid,
+          ROUND(SUM(COALESCE(rc_correction, 0)), 2) AS totalScrapCorrection
+        FROM rm_scrapcorrection
+        WHERE UPPER(COALESCE(rc_movementtype, 'P')) = 'P'
+        GROUP BY rc_batchno, rc_rmid
+      ) scrapCorrections ON scrapCorrections.rc_batchno = TRIM(prodRM.batch) AND scrapCorrections.rc_rmid = prodRM.rd_rmid
+      LEFT JOIN (
+        SELECT
           pd_batchno AS batch,
           MM_RawMtPartNo,
           mm_id,
-          ROUND(SUM(PD_PRODQTY / conVal), 2) AS ThRMForProduction,
+          ROUND(SUM((PD_PRODQTY) / conVal), 2) AS ThRMForProduction,
           SUM(PD_SCRAPQTY) AS pdscrap
         FROM production_details
         LEFT JOIN scheduled_production ON pd_psid = ps_id
@@ -160,8 +372,15 @@ rmCorrection.get("/", async (c) => {
         GROUP BY pd_batchno, mm_id, MM_RawMtPartNo
       ) prodQ ON prodQ.batch = prodRM.batch AND prodQ.mm_id = prodRM.rd_rmid
       WHERE NOT (
-        ROUND(COALESCE((prodRM.RMGiven - prodQ.ThRMForProduction), 0), 2) = 0
-        AND ROUND(COALESCE(prodQ.pdscrap, 0), 2) = 0
+        ROUND(
+          COALESCE((prodRM.ProdQty - prodQ.ThRMForProduction), 0) -
+          COALESCE(corrections.totalCorrection, 0),
+          2
+        ) = 0
+        AND ROUND(
+          COALESCE(prodQ.pdscrap, 0) - COALESCE(scrapCorrections.totalScrapCorrection, 0),
+          2
+        ) = 0
       )
       ORDER BY \`Raw Material\`, batch
     `.execute(db);
@@ -169,6 +388,7 @@ rmCorrection.get("/", async (c) => {
     const entries = rows.rows.map((r) => ({
       rawMaterial: r["Raw Material"] ?? "",
       batch: r.batch,
+      rmid: Number(r.rmid),
       totalInwarded: Number(r["Total Inwarded"]),
       rmGiven: Number(r["RM Given"]),
       rmRemaining: Number(r["RM Remaining"]),

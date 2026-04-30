@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -13,13 +13,19 @@ import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
 import Alert from "@mui/material/Alert";
 import Snackbar from "@mui/material/Snackbar";
-import Stack from "@mui/material/Stack";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import EditNoteIcon from "@mui/icons-material/EditNote";
-import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
-import { useRMCorrectionBatchDetails, useRMCorrectionEntries } from "@/api";
+import EditIcon from "@mui/icons-material/Edit";
+import HistoryIcon from "@mui/icons-material/History";
+import TableViewIcon from "@mui/icons-material/TableView";
+import { useRMCorrectionBatchDetails, useRMCorrectionEntries, useRMCorrectionHistory, useSubmitRMCorrections } from "@/api";
 import type { RMCorrectionEntry } from "@/api";
+import { useAuth } from "@/auth/AuthContext";
 
 type Severity = "success" | "error";
 
@@ -31,13 +37,15 @@ type CorrectionForm = {
 };
 
 type FormState = Record<string, CorrectionForm>;
-const PAGE_SIZE = 30;
 const EMPTY_FORM: CorrectionForm = {
   rmCorrection: "",
   rmRemarks: "",
   scrapCorrection: "",
   scrapRemarks: "",
 };
+
+// Only these user IDs can edit RM corrections
+const ALLOWED_EDIT_USER_IDS = [5, 43, 268];
 
 function rowKey(entry: RMCorrectionEntry): string {
   return `${entry.rawMaterial}__${entry.batch}`;
@@ -50,6 +58,18 @@ function isEntered(value: string): boolean {
 function emptyForm(): CorrectionForm {
   return { ...EMPTY_FORM };
 }
+
+type EditDialogState = {
+  open: boolean;
+  key: string | null;
+};
+
+type HistoryDialogState = {
+  open: boolean;
+  batch: string;
+  rmid: number | null;
+  rawMaterial: string;
+};
 
 function formatDateYYYYMMDD(date: Date): string {
   const y = date.getFullYear();
@@ -74,19 +94,16 @@ function formatWaterfall(markers: Array<{ name: string; time: number }>): string
 
 const CorrectionRow = memo(function CorrectionRow({
   entry,
-  rowValue,
-  onCommit,
-  startDate,
+  onOpenEdit,
+  onOpenHistory,
+  canEdit,
 }: {
   entry: RMCorrectionEntry;
-  rowValue: CorrectionForm;
-  onCommit: (key: string, nextRow: CorrectionForm) => void;
-  startDate: string | null;
+  onOpenEdit: (entry: RMCorrectionEntry) => void;
+  onOpenHistory: (entry: RMCorrectionEntry) => void;
+  canEdit: boolean;
 }) {
-  const key = rowKey(entry);
-  const [isEditing, setIsEditing] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [draft, setDraft] = useState<CorrectionForm>(rowValue);
   const { data, isLoading, isError, error } = useRMCorrectionBatchDetails(entry.batch, isExpanded);
   const detailTotals = useMemo(() => {
     const rows = data?.entries ?? [];
@@ -113,23 +130,6 @@ const CorrectionRow = memo(function CorrectionRow({
     );
   }, [data?.entries]);
 
-  useEffect(() => {
-    if (!isEditing) {
-      setDraft(rowValue);
-    }
-  }, [isEditing, rowValue]);
-
-  const updateDraft = useCallback((field: keyof CorrectionForm, value: string) => {
-    setDraft((prev) => ({ ...prev, [field]: value }));
-  }, []);
-
-  const toggleEdit = () => {
-    if (isEditing) {
-      onCommit(key, draft);
-    }
-    setIsEditing((prev) => !prev);
-  };
-
   const toggleExpand = () => {
     setIsExpanded((prev) => !prev);
   };
@@ -138,102 +138,39 @@ const CorrectionRow = memo(function CorrectionRow({
     <>
       <TableRow hover>
         <TableCell>{entry.rawMaterial || "-"}</TableCell>
-        <TableCell>
-          <Button
-            size="small"
-            variant="text"
-            onClick={toggleExpand}
-            endIcon={isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            sx={{ textTransform: "none", p: 0, minWidth: 0 }}
-          >
-            {entry.batch}
-          </Button>
-        </TableCell>
+        <TableCell>{entry.batch}</TableCell>
         <TableCell align="right">{entry.totalInwarded.toFixed(2)}</TableCell>
         <TableCell align="right">{entry.rmGiven.toFixed(2)}</TableCell>
         <TableCell align="right">{entry.rmRemaining.toFixed(2)}</TableCell>
         <TableCell align="right">{entry.scrap.toFixed(2)}</TableCell>
-        <TableCell>
-          {isEditing ? (
-            <TextField
-              size="small"
-              type="number"
-              value={draft.rmCorrection}
-              onChange={(e) => updateDraft("rmCorrection", e.target.value)}
-              disabled={entry.rmRemaining === 0}
-              inputProps={{ min: 0, step: "0.01" }}
-              placeholder={entry.rmRemaining === 0 ? "NA" : "0.00"}
-              fullWidth
-            />
-          ) : (
-            <Typography variant="body2" color={rowValue.rmCorrection ? "text.primary" : "text.secondary"}>
-              {rowValue.rmCorrection || "-"}
-            </Typography>
-          )}
-        </TableCell>
-        <TableCell>
-          {isEditing ? (
-            <TextField
-              size="small"
-              value={draft.rmRemarks}
-              onChange={(e) => updateDraft("rmRemarks", e.target.value)}
-              disabled={entry.rmRemaining === 0}
-              placeholder={entry.rmRemaining === 0 ? "NA" : "Enter remarks"}
-              fullWidth
-            />
-          ) : (
-            <Typography variant="body2" color={rowValue.rmRemarks ? "text.primary" : "text.secondary"}>
-              {rowValue.rmRemarks || "-"}
-            </Typography>
-          )}
-        </TableCell>
-        <TableCell>
-          {isEditing ? (
-            <TextField
-              size="small"
-              type="number"
-              value={draft.scrapCorrection}
-              onChange={(e) => updateDraft("scrapCorrection", e.target.value)}
-              inputProps={{ step: "0.01" }}
-              placeholder="0.00"
-              fullWidth
-            />
-          ) : (
-            <Typography variant="body2" color={rowValue.scrapCorrection ? "text.primary" : "text.secondary"}>
-              {rowValue.scrapCorrection || "-"}
-            </Typography>
-          )}
-        </TableCell>
-        <TableCell>
-          {isEditing ? (
-            <TextField
-              size="small"
-              value={draft.scrapRemarks}
-              onChange={(e) => updateDraft("scrapRemarks", e.target.value)}
-              placeholder="Enter remarks"
-              fullWidth
-            />
-          ) : (
-            <Typography variant="body2" color={rowValue.scrapRemarks ? "text.primary" : "text.secondary"}>
-              {rowValue.scrapRemarks || "-"}
-            </Typography>
-          )}
-        </TableCell>
         <TableCell align="center">
-          <Button
-            size="small"
-            variant={isEditing ? "contained" : "outlined"}
-            onClick={toggleEdit}
-            sx={{ textTransform: "none" }}
-          >
-            {isEditing ? "Done" : "Edit"}
-          </Button>
+          <Tooltip title={canEdit ? "Edit" : "You do not have permission to edit corrections"}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => onOpenEdit(entry)}
+                disabled={!canEdit}
+              >
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Production Details">
+            <IconButton size="small" onClick={toggleExpand}>
+              <TableViewIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Correction History">
+            <IconButton size="small" onClick={() => onOpenHistory(entry)}>
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </TableCell>
       </TableRow>
 
       {isExpanded && (
         <TableRow>
-          <TableCell colSpan={11} sx={{ bgcolor: "#fafafa" }}>
+          <TableCell colSpan={7} sx={{ bgcolor: "#f5f7fa", py: 1.5 }}>
             {isLoading && <Typography variant="body2">Loading batch production details...</Typography>}
             {isError && (
               <Alert severity="error" sx={{ my: 1 }}>
@@ -241,7 +178,43 @@ const CorrectionRow = memo(function CorrectionRow({
               </Alert>
             )}
             {!isLoading && !isError && (
-              <TableContainer component={Paper} variant="outlined" sx={{ mt: 1 }}>
+              <Box
+                sx={{
+                  mt: 0.5,
+                  p: 1,
+                  border: "2px solid",
+                  borderColor: "#1565c0",
+                  borderRadius: 1.5,
+                  bgcolor: "#ffffff",
+                  boxShadow: "0 2px 12px rgba(21, 101, 192, 0.15)",
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "inline-block",
+                    mb: 0.75,
+                    px: 0.75,
+                    py: 0.25,
+                    borderRadius: 0.75,
+                    bgcolor: "#1565c0",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  Production Details
+                </Typography>
+                <TableContainer
+                  component={Paper}
+                  variant="outlined"
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "#1565c0",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
                 <Table
                   size="small"
                   sx={{
@@ -267,12 +240,13 @@ const CorrectionRow = memo(function CorrectionRow({
                       <TableCell>Lot No</TableCell>
                       <TableCell>Tool</TableCell>
                       <TableCell align="right">No Of Comp</TableCell>
+                      <TableCell align="right">Theo RM(Kg)</TableCell>
                       <TableCell align="right">Cal Comp Wt (Kg)</TableCell>
+                      <TableCell align="right">Theo Scrap</TableCell>
                       <TableCell align="right">SF Rej(Nos)</TableCell>
                       <TableCell align="right">SU Wastage(Nos)</TableCell>
                       <TableCell align="right">Scrap(Kg)</TableCell>
                       <TableCell align="right">Part Wt(Kg)</TableCell>
-                      <TableCell align="right">Theo RM(Kg)</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -283,12 +257,13 @@ const CorrectionRow = memo(function CorrectionRow({
                         <TableCell>{detail.lotNo || "-"}</TableCell>
                         <TableCell>{detail.tool || "-"}</TableCell>
                         <TableCell align="right">{detail.noOfComp}</TableCell>
+                        <TableCell align="right">{detail.theoRmKg.toFixed(4)}</TableCell>
                         <TableCell align="right">{detail.calCompWt.toFixed(4)}</TableCell>
+                        <TableCell align="right">{(detail.theoRmKg - detail.calCompWt).toFixed(4)}</TableCell>
                         <TableCell align="right">{detail.sfRejNos}</TableCell>
                         <TableCell align="right">{detail.suWastageNos}</TableCell>
                         <TableCell align="right">{detail.scrapKg.toFixed(2)}</TableCell>
                         <TableCell align="right">{detail.partWtKg.toFixed(2)}</TableCell>
-                        <TableCell align="right">{detail.theoRmKg.toFixed(4)}</TableCell>
                       </TableRow>
                     ))}
                     {!!data && data.entries.length > 0 && (
@@ -302,24 +277,26 @@ const CorrectionRow = memo(function CorrectionRow({
                       >
                         <TableCell colSpan={4}>Total</TableCell>
                         <TableCell align="right">{detailTotals.noOfComp}</TableCell>
+                        <TableCell align="right">{detailTotals.theoRmKg.toFixed(4)}</TableCell>
                         <TableCell align="right">{detailTotals.calCompWt.toFixed(4)}</TableCell>
+                        <TableCell align="right">{(detailTotals.theoRmKg - detailTotals.calCompWt).toFixed(4)}</TableCell>
                         <TableCell align="right">{detailTotals.sfRejNos}</TableCell>
                         <TableCell align="right">{detailTotals.suWastageNos}</TableCell>
                         <TableCell align="right">{detailTotals.scrapKg.toFixed(2)}</TableCell>
                         <TableCell align="right">{detailTotals.partWtKg.toFixed(2)}</TableCell>
-                        <TableCell align="right">{detailTotals.theoRmKg.toFixed(4)}</TableCell>
                       </TableRow>
                     )}
                     {(!data || data.entries.length === 0) && (
                       <TableRow>
-                        <TableCell colSpan={11} align="center" sx={{ color: "text.secondary" }}>
+                        <TableCell colSpan={12} align="center" sx={{ color: "text.secondary" }}>
                           No production rows found for this batch in selected date range.
                         </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
                 </Table>
-              </TableContainer>
+                </TableContainer>
+              </Box>
             )}
           </TableCell>
         </TableRow>
@@ -335,14 +312,27 @@ export default function RMCorrectionPage() {
     return formatDateYYYYMMDD(d);
   }, []);
 
+  const { user } = useAuth();
+  const canEdit = user ? ALLOWED_EDIT_USER_IDS.includes(user.id) : false;
+
   const mountStartedAtRef = useRef<number>(Date.now());
   const fetchStartedAtRef = useRef<number | null>(null);
   const firstLoadLoggedRef = useRef(false);
   const dataReadyAtRef = useRef<number | null>(null);
   const [startDate, setStartDate] = useState<string>(defaultStartDate);
   const { data, isLoading, isError, error, isFetching, dataUpdatedAt } = useRMCorrectionEntries(startDate);
+  const submitCorrections = useSubmitRMCorrections();
   const [form, setForm] = useState<FormState>({});
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [rmRemainingAdjustments, setRmRemainingAdjustments] = useState<Record<string, number>>({});
+  const [scrapAdjustments, setScrapAdjustments] = useState<Record<string, number>>({});
+  const [editDialog, setEditDialog] = useState<EditDialogState>({ open: false, key: null });
+  const [historyDialog, setHistoryDialog] = useState<HistoryDialogState>({
+    open: false,
+    batch: "",
+    rmid: null,
+    rawMaterial: "",
+  });
+  const [editDraft, setEditDraft] = useState<CorrectionForm>(emptyForm());
   const [toast, setToast] = useState<{ open: boolean; severity: Severity; message: string }>({
     open: false,
     severity: "success",
@@ -350,8 +340,34 @@ export default function RMCorrectionPage() {
   });
 
   const entries = useMemo(() => data?.entries ?? [], [data?.entries]);
-  const displayedEntries = useMemo(() => entries.slice(0, visibleCount), [entries, visibleCount]);
-  const hasMoreRows = visibleCount < entries.length;
+  const adjustedEntries = useMemo(
+    () =>
+      entries.map((entry) => {
+        const key = rowKey(entry);
+        const adjustedRmRemaining = rmRemainingAdjustments[key];
+        return {
+          ...entry,
+          rmRemaining:
+            typeof adjustedRmRemaining === "number"
+              ? adjustedRmRemaining
+              : entry.rmRemaining,
+          scrap:
+            typeof scrapAdjustments[key] === "number"
+              ? scrapAdjustments[key]
+              : entry.scrap,
+        };
+      }),
+    [entries, rmRemainingAdjustments, scrapAdjustments]
+  );
+  const selectedEntry = useMemo(
+    () => adjustedEntries.find((e) => rowKey(e) === editDialog.key) ?? null,
+    [adjustedEntries, editDialog.key]
+  );
+  const historyQuery = useRMCorrectionHistory(
+    historyDialog.batch,
+    historyDialog.rmid,
+    historyDialog.open
+  );
 
   useEffect(() => {
     console.log("[RM Correction][Page] mount started");
@@ -406,74 +422,130 @@ export default function RMCorrectionPage() {
   }, [isError, isLoading]);
 
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    setRmRemainingAdjustments({});
+    setScrapAdjustments({});
   }, [entries.length]);
-
-  const commitRow = useCallback((key: string, nextRow: CorrectionForm) => {
-    setForm((prev) => ({
-      ...prev,
-      [key]: nextRow,
-    }));
-  }, []);
 
   const showToast = (severity: Severity, message: string) => {
     setToast({ open: true, severity, message });
   };
 
-  const loadMoreRows = useCallback(() => {
-    setVisibleCount((prev) => Math.min(prev + PAGE_SIZE, entries.length));
-  }, [entries.length]);
+  const openEditDialog = (entry: RMCorrectionEntry) => {
+    const key = rowKey(entry);
+    setEditDialog({ open: true, key });
+    setEditDraft(form[key] ?? emptyForm());
+  };
 
-  const validateAndSubmit = () => {
-    for (let i = 0; i < entries.length; i += 1) {
-      const entry = entries[i];
-      const key = rowKey(entry);
-      const row = form[key] ?? EMPTY_FORM;
+  const closeEditDialog = () => {
+    setEditDialog({ open: false, key: null });
+    setEditDraft(emptyForm());
+  };
 
-      const rmEntered = isEntered(row.rmCorrection);
-      const scrapEntered = isEntered(row.scrapCorrection);
+  const openHistoryDialog = (entry: RMCorrectionEntry) => {
+    setHistoryDialog({
+      open: true,
+      batch: entry.batch,
+      rmid: entry.rmid,
+      rawMaterial: entry.rawMaterial,
+    });
+  };
 
-      if (rmEntered) {
-        if (entry.rmRemaining === 0) {
-          showToast("error", `Row ${i + 1}: RM Correction cannot be entered when RM Remaining is 0.`);
-          return;
-        }
+  const closeHistoryDialog = () => {
+    setHistoryDialog({ open: false, batch: "", rmid: null, rawMaterial: "" });
+  };
 
-        const rmValue = Number(row.rmCorrection);
-        if (Number.isNaN(rmValue) || rmValue < 0) {
-          showToast("error", `Row ${i + 1}: RM Correction must be a valid non-negative number.`);
-          return;
-        }
+  const submitRowCorrection = async () => {
+    if (!selectedEntry || !editDialog.key) {
+      return;
+    }
+    const activeKey = editDialog.key;
 
-        if (rmValue > entry.rmRemaining) {
-          showToast(
-            "error",
-            `Row ${i + 1}: RM Correction (${rmValue}) cannot be more than RM Remaining (${entry.rmRemaining}).`
-          );
-          return;
-        }
+    const rmEntered = isEntered(editDraft.rmCorrection);
+    const scrapEntered = isEntered(editDraft.scrapCorrection);
 
-        if (!isEntered(row.rmRemarks)) {
-          showToast("error", `Row ${i + 1}: RM Remarks is required when RM Correction is entered.`);
-          return;
-        }
-      }
-
-      if (scrapEntered) {
-        const scrapValue = Number(row.scrapCorrection);
-        if (Number.isNaN(scrapValue)) {
-          showToast("error", `Row ${i + 1}: Scrap Correction must be a valid number.`);
-          return;
-        }
-
-        if (!isEntered(row.scrapRemarks)) {
-          showToast("error", `Row ${i + 1}: Scrap Remarks is required when Scrap Correction is entered.`);
-          return;
-        }
-      }
+    if (!rmEntered && !scrapEntered) {
+      showToast("error", "Enter at least one Actual RM or Actual Scrap with remarks to submit.");
+      return;
     }
 
-    showToast("success", "Under Testing");
+    const item: {
+      batch: string;
+      rmid: number;
+      theoRmRemaining?: number;
+      actualRm?: number;
+      rmRemarks?: string;
+      scrapBefore?: number;
+      actualScrap?: number;
+      scrapRemarks?: string;
+    } = {
+      batch: selectedEntry.batch,
+      rmid: selectedEntry.rmid,
+    };
+
+    if (rmEntered) {
+      if (selectedEntry.rmRemaining === 0) {
+        showToast("error", "Actual RM cannot be entered when Theo RM Remaining is 0.");
+        return;
+      }
+      const rmValue = Number(editDraft.rmCorrection);
+      if (Number.isNaN(rmValue) || rmValue < 0) {
+        showToast("error", "Actual RM must be a valid non-negative number.");
+        return;
+      }
+      if (!isEntered(editDraft.rmRemarks)) {
+        showToast("error", "RM Remarks is required when Actual RM is entered.");
+        return;
+      }
+      item.theoRmRemaining = selectedEntry.rmRemaining;
+      item.actualRm = rmValue;
+      item.rmRemarks = editDraft.rmRemarks.trim();
+    }
+
+    if (scrapEntered) {
+      const scrapValue = Number(editDraft.scrapCorrection);
+      if (Number.isNaN(scrapValue)) {
+        showToast("error", "Actual Scrap must be a valid number.");
+        return;
+      }
+      if (!isEntered(editDraft.scrapRemarks)) {
+        showToast("error", "Scrap Remarks is required when Actual Scrap is entered.");
+        return;
+      }
+      item.scrapBefore = selectedEntry.scrap;
+      item.actualScrap = scrapValue;
+      item.scrapRemarks = editDraft.scrapRemarks.trim();
+    }
+
+    try {
+      const result = await submitCorrections.mutateAsync({ items: [item] });
+
+      setForm((prev) => ({
+        ...prev,
+        [activeKey]: emptyForm(),
+      }));
+
+      if (rmEntered && typeof item.actualRm === "number") {
+        setRmRemainingAdjustments((prev) => ({
+          ...prev,
+          [activeKey]: Number(item.actualRm),
+        }));
+      }
+
+      if (scrapEntered && typeof item.actualScrap === "number") {
+        setScrapAdjustments((prev) => ({
+          ...prev,
+          [activeKey]: Number(item.actualScrap),
+        }));
+      }
+
+      showToast(
+        "success",
+        `Submitted successfully (${result.inserted} row(s): RM ${result.insertedRm}, Scrap ${result.insertedScrap})`
+      );
+      closeEditDialog();
+    } catch (err: any) {
+      showToast("error", err?.message ?? "Failed to submit RM corrections");
+    }
   };
 
   return (
@@ -505,10 +577,6 @@ export default function RMCorrectionPage() {
           InputLabelProps={{ shrink: true }}
           sx={{ minWidth: 190 }}
         />
-        <Box sx={{ flexGrow: 1 }} />
-        <Button variant="contained" onClick={validateAndSubmit} sx={{ textTransform: "none" }}>
-          Submit
-        </Button>
       </Box>
 
       <Box sx={{ flex: 1, p: 3 }}>
@@ -561,32 +629,28 @@ export default function RMCorrectionPage() {
                   <TableCell align="right" sx={{ width: "7%" }}>
                     Scrap
                   </TableCell>
-                  <TableCell sx={{ width: "9%" }}>Actual RM</TableCell>
-                  <TableCell sx={{ width: "13%" }}>RM Remarks</TableCell>
-                  <TableCell sx={{ width: "9%" }}>Actual Scrap</TableCell>
-                  <TableCell sx={{ width: "13%" }}>Scrap Remarks</TableCell>
-                  <TableCell align="center" sx={{ width: "9%" }}>
-                    Action
+                  <TableCell align="center" sx={{ width: "10%" }}>
+                    Actions
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {displayedEntries.map((entry, idx) => {
+                {adjustedEntries.map((entry, idx) => {
                   const key = rowKey(entry);
                   return (
                     <CorrectionRow
                       key={`${key}_${idx}`}
                       entry={entry}
-                      rowValue={form[key] ?? EMPTY_FORM}
-                      onCommit={commitRow}
-                      startDate={startDate}
+                      onOpenEdit={openEditDialog}
+                      onOpenHistory={openHistoryDialog}
+                      canEdit={canEdit}
                     />
                   );
                 })}
 
                 {entries.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={11} align="center" sx={{ py: 5, color: "text.secondary" }}>
+                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: "text.secondary" }}>
                       No records found.
                     </TableCell>
                   </TableRow>
@@ -595,20 +659,153 @@ export default function RMCorrectionPage() {
             </Table>
           </TableContainer>
         )}
-
-        {!isLoading && !isError && hasMoreRows && (
-          <Stack direction="row" justifyContent="center" sx={{ mt: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<MoreHorizIcon />}
-              onClick={loadMoreRows}
-              sx={{ textTransform: "none" }}
-            >
-              More ({Math.min(PAGE_SIZE, entries.length - visibleCount)} more)
-            </Button>
-          </Stack>
-        )}
       </Box>
+
+      <Dialog open={editDialog.open} onClose={closeEditDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Update RM and Scrap Correction</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
+          {selectedEntry && (
+            <Box
+              sx={{
+                px: 1.5,
+                py: 1,
+                bgcolor: "action.hover",
+                borderRadius: 1,
+                display: "flex",
+                gap: 3,
+                flexWrap: "wrap",
+              }}
+            >
+              <Typography variant="body2" sx={{ fontSize: 12 }}>
+                Theo RM Remaining: <strong>{selectedEntry.rmRemaining.toFixed(2)}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: 12 }}>
+                Scrap: <strong>{selectedEntry.scrap.toFixed(2)}</strong>
+              </Typography>
+            </Box>
+          )}
+          <TextField
+            size="small"
+            type="number"
+            label="Actual RM"
+            value={editDraft.rmCorrection}
+            onChange={(e) => setEditDraft((prev) => ({ ...prev, rmCorrection: e.target.value }))}
+            inputProps={{ min: 0, step: "0.01" }}
+            InputLabelProps={{ sx: { fontSize: 12 } }}
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="RM Remarks"
+            value={editDraft.rmRemarks}
+            onChange={(e) => setEditDraft((prev) => ({ ...prev, rmRemarks: e.target.value }))}
+            fullWidth
+          />
+          <TextField
+            size="small"
+            type="number"
+            label="Actual Scrap"
+            value={editDraft.scrapCorrection}
+            onChange={(e) => setEditDraft((prev) => ({ ...prev, scrapCorrection: e.target.value }))}
+            inputProps={{ step: "0.01" }}
+            InputLabelProps={{ sx: { fontSize: 12 } }}
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="Scrap Remarks"
+            value={editDraft.scrapRemarks}
+            onChange={(e) => setEditDraft((prev) => ({ ...prev, scrapRemarks: e.target.value }))}
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEditDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={submitRowCorrection}
+            disabled={submitCorrections.isPending}
+          >
+            Submit
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={historyDialog.open} onClose={closeHistoryDialog} fullWidth maxWidth="md">
+        <DialogTitle>Correction History</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Box
+            sx={{
+              mb: 1.5,
+              px: 1.5,
+              py: 1,
+              bgcolor: "action.hover",
+              borderRadius: 1,
+              display: "flex",
+              gap: 3,
+              flexWrap: "wrap",
+            }}
+          >
+            <Typography variant="body2" sx={{ fontSize: 12 }}>
+              Raw Material: <strong>{historyDialog.rawMaterial || "-"}</strong>
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: 12 }}>
+              Batch: <strong>{historyDialog.batch || "-"}</strong>
+            </Typography>
+          </Box>
+
+          {historyQuery.isLoading && (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
+
+          {historyQuery.isError && (
+            <Alert severity="error" sx={{ my: 1 }}>
+              {(historyQuery.error as Error)?.message || "Failed to load correction history"}
+            </Alert>
+          )}
+
+          {!historyQuery.isLoading && !historyQuery.isError && (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Type</TableCell>
+                    <TableCell align="right">Qty Before</TableCell>
+                    <TableCell align="right">Actual Qty</TableCell>
+                    <TableCell>Remarks</TableCell>
+                    <TableCell>Entry Time</TableCell>
+                    <TableCell>User</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(historyQuery.data?.entries ?? []).map((item, idx) => (
+                    <TableRow key={`hist_${idx}`}>
+                      <TableCell>{item.type}</TableCell>
+                      <TableCell align="right">{item.qtyBefore.toFixed(2)}</TableCell>
+                      <TableCell align="right">{(item.qtyBefore - item.correction).toFixed(2)}</TableCell>
+                      <TableCell>{item.remarks || "-"}</TableCell>
+                      <TableCell>{item.createdAt}</TableCell>
+                      <TableCell>{item.userLogin || "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!!historyQuery.data && historyQuery.data.entries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} align="center" sx={{ py: 4, color: "text.secondary" }}>
+                        No RM/Scrap correction history found for this Batch and RM.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeHistoryDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={toast.open}

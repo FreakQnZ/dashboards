@@ -1,9 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiFetch } from "./client";
 
 export interface RMCorrectionEntry {
   rawMaterial: string;
   batch: string;
+  rmid: number;
   rmGiven: number;
   totalInwarded: number;
   rmRemaining: number;
@@ -34,6 +35,41 @@ export interface RMCorrectionBatchDetailResponse {
   entries: RMCorrectionBatchDetailEntry[];
 }
 
+export interface RMCorrectionHistoryEntry {
+  type: "RM" | "SCRAP";
+  qtyBefore: number;
+  correction: number;
+  remarks: string;
+  createdAt: string;
+  userLogin: string;
+}
+
+export interface RMCorrectionHistoryResponse {
+  count: number;
+  entries: RMCorrectionHistoryEntry[];
+}
+
+export interface RMCorrectionSubmitItem {
+  batch: string;
+  rmid: number;
+  theoRmRemaining?: number;
+  actualRm?: number;
+  rmRemarks?: string;
+  scrapBefore?: number;
+  actualScrap?: number;
+  scrapRemarks?: string;
+}
+
+export interface RMCorrectionSubmitRequest {
+  items: RMCorrectionSubmitItem[];
+}
+
+export interface RMCorrectionSubmitResponse {
+  inserted: number;
+  insertedRm: number;
+  insertedScrap: number;
+}
+
 export function useRMCorrectionEntries(startDate: string | null) {
   return useQuery({
     queryKey: ["rm-correction", startDate],
@@ -61,5 +97,31 @@ export function useRMCorrectionBatchDetails(
     queryFn: async () => {
       return apiFetch<RMCorrectionBatchDetailResponse>(`/api/rm-correction/batch/${encodeURIComponent(batch)}`);
     },
+  });
+}
+
+export function useRMCorrectionHistory(
+  batch: string,
+  rmid: number | null,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ["rm-correction-history", batch, rmid],
+    enabled: enabled && !!batch && Number.isFinite(rmid),
+    queryFn: async () => {
+      return apiFetch<RMCorrectionHistoryResponse>(
+        `/api/rm-correction/history/${encodeURIComponent(batch)}/${encodeURIComponent(String(rmid))}`
+      );
+    },
+  });
+}
+
+export function useSubmitRMCorrections() {
+  return useMutation({
+    mutationFn: (payload: RMCorrectionSubmitRequest) =>
+      apiFetch<RMCorrectionSubmitResponse>("/api/rm-correction/submit", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
   });
 }

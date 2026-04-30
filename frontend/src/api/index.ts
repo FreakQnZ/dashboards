@@ -50,12 +50,19 @@ export type {
 export {
   useRMCorrectionEntries,
   useRMCorrectionBatchDetails,
+  useRMCorrectionHistory,
+  useSubmitRMCorrections,
 } from "./rmCorrectionQueries";
 export type {
   RMCorrectionEntry,
   RMCorrectionResponse,
   RMCorrectionBatchDetailEntry,
   RMCorrectionBatchDetailResponse,
+  RMCorrectionHistoryEntry,
+  RMCorrectionHistoryResponse,
+  RMCorrectionSubmitItem,
+  RMCorrectionSubmitRequest,
+  RMCorrectionSubmitResponse,
 } from "./rmCorrectionQueries";
 export {
   useReportGroups,
