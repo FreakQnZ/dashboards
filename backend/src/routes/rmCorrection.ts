@@ -357,7 +357,7 @@ rmCorrection.get("/", async (c) => {
         LEFT JOIN scheduled_production ON pd_psid = ps_id
         LEFT JOIN (
           SELECT
-            CT_COMPID,
+            CT_COMPID, ct_id,
             mm_id,
             MM_RawMtPartNo,
             ((1 / ((MT_Density * MM_Thickness) * MM_StripWidth)) * ((1000 * CT_NO_OF_CAVITY) / CT_Pitch)) AS conVal
@@ -368,7 +368,7 @@ rmCorrection.get("/", async (c) => {
             AND CT_PPC = 'Y'
             AND CT_PITCH > 0
             AND CT_NO_OF_CAVITY > 0
-        ) t ON CT_COMPID = PS_PARENTCOMPID
+        ) t ON CT_COMPID = PS_PARENTCOMPID AND ct_id = PD_TOOLID
         GROUP BY pd_batchno, mm_id, MM_RawMtPartNo
       ) prodQ ON prodQ.batch = prodRM.batch AND prodQ.mm_id = prodRM.rd_rmid
       WHERE NOT (
